@@ -415,6 +415,8 @@ internal fun PlayerScreenRuntime.switchToDownloadedEpisode(downloadItem: Downloa
 }
 
 internal fun PlayerScreenRuntime.playNextEpisode() {
+    if (nextEpisodeAutoPlaySearching || nextEpisodeAutoPlayCountdown != null) return
+
     scope.launchPlayerNextEpisodeAutoPlay(
         previousJob = nextEpisodeAutoPlayJob,
         nextEpisodeInfo = nextEpisodeInfo,
@@ -427,6 +429,7 @@ internal fun PlayerScreenRuntime.playNextEpisode() {
         onDownloadedEpisodeSelected = { item, episode -> switchToDownloadedEpisode(item, episode) },
         onEpisodeStreamSelected = { stream, episode -> switchToEpisodeStream(stream, episode) },
         onManualSelectionRequired = { nextVideo ->
+            nextEpisodeCardDismissed = true
             episodeStreamsPanelState = EpisodeStreamsPanelState(
                 showStreams = true,
                 selectedEpisode = nextVideo,
