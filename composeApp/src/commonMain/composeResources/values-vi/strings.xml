@@ -2378,7 +2378,7 @@
     <string name="live_tv_settings_section_navigation">ĐIỀU HƯỚNG</string>
     <string name="live_tv_settings_navigation_title">Hiển thị Truyền hình trên thanh điều hướng</string>
     <string name="live_tv_settings_navigation_description">Hiển thị tab Truyền hình trên thanh điều hướng chính của ứng dụng.</string>
-    <string name="live_tv_settings_section_playlist">All List</string>
+    <string name="live_tv_settings_section_playlist">Danh sách phát</string>
     <string name="live_tv_settings_section_providers">NHÀ CUNG CẤP</string>
     <string name="live_tv_xtream_title">Xtream</string>
     <string name="live_tv_xtream_description">Kết nối bằng URL máy chủ, tên đăng nhập và mật khẩu.</string>
@@ -2412,7 +2412,7 @@
     <string name="live_tv_settings_cancel_edit">Hủy</string>
     <string name="compose_player_channels">Kênh</string>
     <string name="live_tv_filter_all_playlists">Tất cả danh sách phát</string>
-    <string name="live_tv_filter_choose_playlist">Danh sách phát</string>
+    <string name="live_tv_filter_choose_playlist">All List</string>
     <string name="settings_playback_auto_skip_segments">Tự động bỏ qua</string>
     <string name="settings_playback_auto_skip_none">Không có</string>
     <string name="settings_playback_auto_skip_intro">Giới thiệu / Mở đầu</string>

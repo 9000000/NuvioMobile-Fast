@@ -277,12 +277,18 @@ object LiveTvRepository {
             val loadedChannels = mutableListOf<LiveTvChannel>()
             val failedPlaylistNames = mutableListOf<String>()
 
+            log.d { "LiveTV: Loading channels - Xtream configured: ${currentState.xtreamSettings.isConfigured}, Stalker configured: ${currentState.stalkerSettings.isConfigured}" }
+            log.d { "LiveTV: Xtream settings: ${currentState.xtreamSettings}" }
+            log.d { "LiveTV: Playlists: ${enabledPlaylists.map { it.source }}" }
+
             enabledPlaylists.forEach { playlist ->
                 val result = runCatching {
+                    log.d { "LiveTV: Fetching playlist from: ${playlist.source}" }
                     val payload = when (playlist.type) {
                         LiveTvPlaylistType.Url -> withContext(Dispatchers.Default) { httpGetText(playlist.source) }
                         LiveTvPlaylistType.LocalFile -> playlist.source
                     }
+                    log.d { "LiveTV: Playlist payload length: ${payload.length}" }
                     parseM3uPlaylist(payload, playlist)
                 }
 
