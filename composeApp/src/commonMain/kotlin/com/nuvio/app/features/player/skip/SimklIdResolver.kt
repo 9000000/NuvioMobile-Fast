@@ -45,40 +45,62 @@ internal object SimklIdResolver {
     suspend fun resolveIds(source: String, id: String): ResolvedIds? {
         val cacheKey = "$source:$id"
         idsCache[cacheKey]?.let { return it }
-        if (SimklConfig.CLIENT_ID.isBlank()) return null
+        val simklResult = if (SimklConfig.CLIENT_ID.isNotBlank()) {
+            try {
+                val searchText = httpGetText("$SIMKL_API_BASE_URL/search/id?$source=$id&${commonParams()}")
+                val results = json.parseToJsonElement(searchText).jsonArray
+                if (results.isNotEmpty()) {
+                    val simklId = results[0].jsonObject["ids"]?.jsonObject?.get("simkl")?.jsonPrimitive?.long
+                    if (simklId != null) {
+                        val type = results[0].jsonObject["type"]?.jsonPrimitive?.content ?: "anime"
+                        val mediaType = when (type) {
+                            "movie" -> "movies"
+                            "show" -> "tv"
+                            else -> "anime"
+                        }
 
-        return try {
-            val searchText = httpGetText("$SIMKL_API_BASE_URL/search/id?$source=$id&${commonParams()}")
-            val results = json.parseToJsonElement(searchText).jsonArray
-            if (results.isEmpty()) return null
-            val simklId = results[0].jsonObject["ids"]?.jsonObject?.get("simkl")?.jsonPrimitive?.long ?: return null
+                        val detailsText = httpGetText("$SIMKL_API_BASE_URL/$mediaType/$simklId?extended=full&${commonParams()}")
+                        val details = json.parseToJsonElement(detailsText).jsonObject
+                        val ids = details["ids"]?.jsonObject
 
-            val type = results[0].jsonObject["type"]?.jsonPrimitive?.content ?: "anime"
-            val mediaType = when (type) {
-                "movie" -> "movies"
-                "show" -> "tv"
-                else -> "anime"
+                        ResolvedIds(
+                            simklId = simklId,
+                            type = mediaType,
+                            mal = ids?.get("mal")?.jsonPrimitive?.content?.takeIf { it.isNotBlank() },
+                            anilist = ids?.get("anilist")?.jsonPrimitive?.content?.takeIf { it.isNotBlank() },
+                            kitsu = ids?.get("kitsu")?.jsonPrimitive?.content?.takeIf { it.isNotBlank() },
+                            imdb = ids?.get("imdb")?.jsonPrimitive?.content?.takeIf { it.isNotBlank() },
+                            tvdbSeason = details["season"]?.jsonPrimitive?.int?.takeIf { it > 0 }
+                        )
+                    } else null
+                } else null
+            } catch (_: Exception) {
+                null
             }
+        } else null
 
-            val detailsText = httpGetText("$SIMKL_API_BASE_URL/$mediaType/$simklId?extended=full&${commonParams()}")
-            val details = json.parseToJsonElement(detailsText).jsonObject
-            val ids = details["ids"]?.jsonObject
-
-            ResolvedIds(
-                simklId = simklId,
-                type = mediaType,
-                mal = ids?.get("mal")?.jsonPrimitive?.content?.takeIf { it.isNotBlank() },
-                anilist = ids?.get("anilist")?.jsonPrimitive?.content?.takeIf { it.isNotBlank() },
-                kitsu = ids?.get("kitsu")?.jsonPrimitive?.content?.takeIf { it.isNotBlank() },
-                imdb = ids?.get("imdb")?.jsonPrimitive?.content?.takeIf { it.isNotBlank() },
-                tvdbSeason = details["season"]?.jsonPrimitive?.int?.takeIf { it > 0 }
-            ).also { idsCache[cacheKey] = it }
-        } catch (_: Exception) {
-            null
+        if (simklResult != null) {
+            return simklResult.also { idsCache[cacheKey] = it }
         }
+
+        // Fallback to ARM (Anime Relations Mappings) if Simkl failed or requires user token
+        val armEntry = ArmIdResolver.resolveBySource(source, id)
+        if (armEntry != null) {
+            return ResolvedIds(
+                simklId = 0L,
+                type = "anime",
+                mal = armEntry.mal,
+                anilist = armEntry.anilist,
+                kitsu = armEntry.kitsu,
+                imdb = armEntry.imdb,
+            ).also { idsCache[cacheKey] = it }
+        }
+
+        return null
     }
 
     suspend fun getEpisodeMapping(simklId: Long, type: String = "anime"): List<EpisodeMapping> {
+        if (simklId <= 0L) return emptyList()
         episodeCache[simklId]?.let { return it }
         if (SimklConfig.CLIENT_ID.isBlank()) return emptyList()
 
@@ -117,18 +139,37 @@ internal object SimklIdResolver {
         season: Int,
         episode: Int
     ): ResolvedIds? {
-        val base = resolveIds("imdb", imdbId) ?: return null
-        if (base.type != "anime") return base
+        val base = resolveIds("imdb", imdbId)
+        if (base != null && base.simklId > 0L) {
+            if (base.type != "anime") return base
 
-        // If the parent entry already owns this season, no sibling lookup needed.
-        val baseSeason = base.tvdbSeason
-        if (baseSeason != null && baseSeason == season) return base
+            // If the parent entry already owns this season, no sibling lookup needed.
+            val baseSeason = base.tvdbSeason
+            if (baseSeason != null && baseSeason == season) return base
 
-        // Fetch the parent with full_anime_seasons to discover per-season entries.
-        val seasonSimklId = resolveSeasonSimklId(base.simklId, base.type, season)
-        if (seasonSimklId != null && seasonSimklId != base.simklId) {
-            val siblingIds = resolveIdsBySimklId(seasonSimklId, base.type)
-            if (siblingIds != null) return siblingIds
+            // Fetch the parent with full_anime_seasons to discover per-season entries.
+            val seasonSimklId = resolveSeasonSimklId(base.simklId, base.type, season)
+            if (seasonSimklId != null && seasonSimklId != base.simklId) {
+                val siblingIds = resolveIdsBySimklId(seasonSimklId, base.type)
+                if (siblingIds != null) return siblingIds
+            }
+
+            return base
+        }
+
+        // Fallback to ARM for season-specific entry resolution
+        val armEntries = ArmIdResolver.resolveImdb(imdbId)
+        if (armEntries.isNotEmpty()) {
+            val entry = armEntries.getOrNull(season - 1) ?: armEntries.first()
+            return ResolvedIds(
+                simklId = 0L,
+                type = "anime",
+                mal = entry.mal,
+                anilist = entry.anilist,
+                kitsu = entry.kitsu,
+                imdb = imdbId,
+                tvdbSeason = season,
+            )
         }
 
         return base
@@ -188,6 +229,7 @@ internal object SimklIdResolver {
         idsCache.clear()
         episodeCache.clear()
         animeSeasonCache.clear()
+        ArmIdResolver.clearCache()
     }
 }
 

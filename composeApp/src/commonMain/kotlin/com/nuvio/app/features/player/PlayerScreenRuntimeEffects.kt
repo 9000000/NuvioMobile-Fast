@@ -505,7 +505,9 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
             skipIntervals = SkipIntroRepository.getMovieSkipIntervals(parentMetaId, vid)
             return@LaunchedEffect
         }
-        if (season == null || episode == null || vid == null) return@LaunchedEffect
+        val resolvedEpisode = episode ?: vid?.substringAfterLast(':')?.toIntOrNull()
+        if (resolvedEpisode == null || vid == null) return@LaunchedEffect
+        val effectiveSeason = season ?: 1
 
         launch {
             val imdbFromContent = parentMetaId.takeIf { it.startsWith("tt") }
@@ -516,17 +518,20 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
             val intervals = when {
                 vid.startsWith("mal:") -> {
                     val malId = vid.removePrefix("mal:").substringBefore(':')
-                    SkipIntroRepository.getSkipIntervalsForMal(malId = malId, episode = episode, imdbId = imdbFromContent, imdbSeason = season, imdbEpisode = episode)
+                    SkipIntroRepository.getSkipIntervalsForMal(malId = malId, episode = resolvedEpisode, imdbId = imdbFromContent, imdbSeason = season, imdbEpisode = resolvedEpisode)
                 }
                 vid.startsWith("kitsu:") -> {
                     val kitsuId = vid.removePrefix("kitsu:").substringBefore(':')
-                    SkipIntroRepository.getSkipIntervalsForKitsu(kitsuId = kitsuId, episode = episode, imdbId = imdbFromContent, imdbSeason = season, imdbEpisode = episode)
+                    SkipIntroRepository.getSkipIntervalsForKitsu(kitsuId = kitsuId, episode = resolvedEpisode, imdbId = imdbFromContent, imdbSeason = season, imdbEpisode = resolvedEpisode)
                 }
-                else -> SkipIntroRepository.getSkipIntervals(
-                    imdbId = vid.substringBefore(':').takeIf { it.startsWith("tt") },
-                    season = season,
-                    episode = episode,
-                )
+                else -> {
+                    val resolvedImdb = vid.substringBefore(':').takeIf { it.startsWith("tt") } ?: imdbFromContent
+                    SkipIntroRepository.getSkipIntervals(
+                        imdbId = resolvedImdb,
+                        season = effectiveSeason,
+                        episode = resolvedEpisode,
+                    )
+                }
             }
             skipIntervals = intervals
         }

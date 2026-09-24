@@ -18,19 +18,40 @@ object SkipIntroRepository {
         contentId: String?,
         videoId: String?,
         requireSkipIntroEnabled: Boolean = true,
-    ): List<SkipInterval> {
-        if (!introDbConfigured ||
-            (requireSkipIntroEnabled && !PlayerSettingsRepository.uiState.value.skipIntroEnabled)
-        ) return emptyList()
+    ): List<SkipInterval> = coroutineScope {
+        if (requireSkipIntroEnabled && !PlayerSettingsRepository.uiState.value.skipIntroEnabled) return@coroutineScope emptyList()
+        val cacheKey = "movie:$contentId:$videoId"
+        cache[cacheKey]?.let { return@coroutineScope it }
+
         val imdbId = resolveMovieSkipImdbId(
             contentId, videoId,
             resolveTmdb = { TmdbService.tmdbToImdb(it, "movie") },
             resolveAnime = { source, id -> SimklIdResolver.resolveIds(source, id)?.imdb },
-        ) ?: return emptyList()
-        val cacheKey = "movie:$imdbId"
-        cache[cacheKey]?.let { return it }
-        val data = SkipIntroApi.getIntroDbMovieSegments(imdbId) ?: return emptyList()
-        return data.movieSkipIntervals().also { cache[cacheKey] = it }
+        )
+
+        val introDbDeferred = async {
+            if (introDbConfigured && imdbId != null) {
+                val data = SkipIntroApi.getIntroDbMovieSegments(imdbId)
+                data?.movieSkipIntervals() ?: emptyList()
+            } else emptyList()
+        }
+
+        val aniSkipDeferred = async {
+            val malId = when {
+                videoId?.startsWith("mal:") == true -> videoId.removePrefix("mal:").substringBefore(':')
+                contentId?.startsWith("mal:") == true -> contentId.removePrefix("mal:").substringBefore(':')
+                videoId?.startsWith("kitsu:") == true -> SimklIdResolver.resolveIds("kitsu", videoId.removePrefix("kitsu:").substringBefore(':'))?.mal
+                contentId?.startsWith("kitsu:") == true -> SimklIdResolver.resolveIds("kitsu", contentId.removePrefix("kitsu:").substringBefore(':'))?.mal
+                imdbId != null -> SimklIdResolver.resolveIds("imdb", imdbId)?.mal
+                else -> null
+            }
+            if (malId != null) fetchFromAniSkip(malId, episode = 1) else emptyList()
+        }
+
+        return@coroutineScope mergeByPriority(
+            introDbDeferred.await(),
+            aniSkipDeferred.await(),
+        ).also { cache[cacheKey] = it }
     }
 
     suspend fun getSkipIntervals(

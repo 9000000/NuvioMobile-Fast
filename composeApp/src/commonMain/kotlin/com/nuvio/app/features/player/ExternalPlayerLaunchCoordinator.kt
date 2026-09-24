@@ -118,19 +118,19 @@ private suspend fun resolveSkipSegmentsJson(
                     contentId, videoId, requireSkipIntroEnabled = false,
                 )
             }
-            val ep = episode ?: return@withTimeoutOrNull null
+            val ep = episode ?: videoId.substringAfterLast(':').toIntOrNull() ?: return@withTimeoutOrNull null
             when {
                 videoId.startsWith("mal:") -> {
                     val malId = videoId.removePrefix("mal:").substringBefore(':')
-                    SkipIntroRepository.getSkipIntervalsForMal(malId, ep, requireSkipIntroEnabled = false, imdbId = imdbFromContent, imdbSeason = season, imdbEpisode = episode)
+                    SkipIntroRepository.getSkipIntervalsForMal(malId, ep, requireSkipIntroEnabled = false, imdbId = imdbFromContent, imdbSeason = season, imdbEpisode = ep)
                 }
                 videoId.startsWith("kitsu:") -> {
                     val kitsuId = videoId.removePrefix("kitsu:").substringBefore(':')
-                    SkipIntroRepository.getSkipIntervalsForKitsu(kitsuId, ep, requireSkipIntroEnabled = false, imdbId = imdbFromContent, imdbSeason = season, imdbEpisode = episode)
+                    SkipIntroRepository.getSkipIntervalsForKitsu(kitsuId, ep, requireSkipIntroEnabled = false, imdbId = imdbFromContent, imdbSeason = season, imdbEpisode = ep)
                 }
                 else -> {
-                    val imdbId = videoId.substringBefore(':').takeIf { it.startsWith("tt") } ?: return@withTimeoutOrNull null
-                    val s = season ?: return@withTimeoutOrNull null
+                    val imdbId = videoId.substringBefore(':').takeIf { it.startsWith("tt") } ?: imdbFromContent ?: return@withTimeoutOrNull null
+                    val s = season ?: 1
                     SkipIntroRepository.getSkipIntervals(imdbId, s, ep, requireSkipIntroEnabled = false)
                 }
             }
