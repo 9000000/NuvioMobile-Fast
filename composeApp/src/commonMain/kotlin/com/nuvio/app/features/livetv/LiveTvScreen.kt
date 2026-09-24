@@ -77,6 +77,10 @@ import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_retry
 import nuvio.composeapp.generated.resources.live_tv_action_back_to_top
+import nuvio.composeapp.generated.resources.live_tv_empty_favorites_message
+import nuvio.composeapp.generated.resources.live_tv_empty_favorites_title
+import nuvio.composeapp.generated.resources.live_tv_filter_default_view
+import nuvio.composeapp.generated.resources.live_tv_filter_select_playlist
 import nuvio.composeapp.generated.resources.live_tv_button_continue
 import nuvio.composeapp.generated.resources.live_tv_empty_message
 import nuvio.composeapp.generated.resources.live_tv_empty_title
@@ -115,16 +119,30 @@ fun LiveTvScreen(
         }
     }
     var searchQuery by rememberSaveable { mutableStateOf("") }
-    var filterMode by rememberSaveable { mutableStateOf(LiveTvChannelFilterMode.All) }
+    var filterMode by rememberSaveable { mutableStateOf(LiveTvChannelFilterMode.Favorites) }
     var selectedCategoryName by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedPlaylistId by rememberSaveable { mutableStateOf<String?>(null) }
+    var launchingChannelId by remember { mutableStateOf<String?>(null) }
+
+    val resetTrigger by LiveTvRepository.navigationResetEvent.collectAsStateWithLifecycle()
+    var lastHandledResetTrigger by rememberSaveable { mutableStateOf(0L) }
+
+    LaunchedEffect(resetTrigger) {
+        if (resetTrigger != 0L && resetTrigger != lastHandledResetTrigger) {
+            lastHandledResetTrigger = resetTrigger
+            selectedPlaylistId = null
+            selectedCategoryName = null
+            filterMode = LiveTvChannelFilterMode.Favorites
+            searchQuery = ""
+        }
+    }
 
     val allChannelsLabel = stringResource(Res.string.live_tv_group_all_channels)
     val favoritesLabel = stringResource(Res.string.live_tv_filter_favorites)
     val uncategorizedLabel = stringResource(Res.string.live_tv_group_uncategorized)
     val chooseCategoryLabel = stringResource(Res.string.live_tv_filter_choose_category)
-    val allPlaylistsLabel = stringResource(Res.string.live_tv_filter_all_playlists)
-    val choosePlaylistLabel = stringResource(Res.string.live_tv_filter_choose_playlist)
+    val allPlaylistsLabel = stringResource(Res.string.live_tv_filter_default_view)
+    val choosePlaylistLabel = stringResource(Res.string.live_tv_filter_select_playlist)
 
     val activePlaylists = remember(uiState.playlists, uiState.channels, uiState.xtreamSettings, uiState.stalkerSettings) {
         val idsWithChannels = uiState.channels.mapNotNull { it.playlistId }.toSet()
@@ -162,7 +180,7 @@ fun LiveTvScreen(
 
     val channelsInPlaylist = remember(uiState.channels, selectedPlaylistId, selectedPlaylist) {
         if (selectedPlaylistId == null) {
-            uiState.channels
+            emptyList()
         } else {
             uiState.channels.filter { channel ->
                 channel.playlistId == selectedPlaylistId || channel.playlistName == selectedPlaylist?.name
@@ -211,8 +229,13 @@ fun LiveTvScreen(
     }
 
     val playChannel: (LiveTvChannel) -> Unit = { channel ->
+        launchingChannelId = channel.id
         LiveTvRepository.markChannelWatched(channel)
         onChannelClick(channel)
+    }
+
+    LaunchedEffect(Unit) {
+        launchingChannelId = null
     }
 
     LaunchedEffect(scrollToTopRequests) {
@@ -313,6 +336,7 @@ fun LiveTvScreen(
                             LiveTvRecentChannelCard(
                                 channel = lastWatchedChannel,
                                 categoryName = categoryNameForChannel(lastWatchedChannel, uncategorizedLabel),
+                                isLaunching = launchingChannelId == lastWatchedChannel.id,
                                 onContinueClick = { playChannel(lastWatchedChannel) },
                             )
                         }
@@ -341,7 +365,7 @@ fun LiveTvScreen(
                             allPlaylistsLabel = allPlaylistsLabel,
                             onPlaylistSelected = { playlist ->
                                 selectedPlaylistId = playlist?.id
-                                filterMode = LiveTvChannelFilterMode.All
+                                filterMode = if (playlist == null) LiveTvChannelFilterMode.Favorites else LiveTvChannelFilterMode.All
                                 selectedCategoryName = null
                             },
                             onAllSelected = {
@@ -365,16 +389,24 @@ fun LiveTvScreen(
 
                     if (visibleChannels.isEmpty()) {
                         item {
-                            HomeEmptyStateCard(
-                                title = stringResource(Res.string.live_tv_no_matching_channels_title),
-                                message = stringResource(Res.string.live_tv_no_matching_channels_message),
-                            )
+                            if (selectedPlaylistId == null && filterMode == LiveTvChannelFilterMode.Favorites && searchQuery.isBlank()) {
+                                HomeEmptyStateCard(
+                                    title = stringResource(Res.string.live_tv_empty_favorites_title),
+                                    message = stringResource(Res.string.live_tv_empty_favorites_message),
+                                )
+                            } else {
+                                HomeEmptyStateCard(
+                                    title = stringResource(Res.string.live_tv_no_matching_channels_title),
+                                    message = stringResource(Res.string.live_tv_no_matching_channels_message),
+                                )
+                            }
                         }
                     } else {
                         liveTvChannelList(
                             channels = visibleChannels,
                             favoriteChannelIds = uiState.favoriteChannelIds,
                             uncategorizedGroupName = uncategorizedLabel,
+                            launchingChannelId = launchingChannelId,
                             onFavoriteClick = { channel -> LiveTvRepository.toggleFavoriteChannel(channel.id) },
                             onPlayClick = playChannel,
                         )
@@ -617,6 +649,7 @@ private fun LiveTvChannelsSubheader(
 private fun LiveTvRecentChannelCard(
     channel: LiveTvChannel,
     categoryName: String,
+    isLaunching: Boolean = false,
     onContinueClick: () -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio
@@ -674,11 +707,19 @@ private fun LiveTvRecentChannelCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.PlayArrow,
-                        contentDescription = null,
-                        tint = tokens.colors.accent,
-                    )
+                    if (isLaunching) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = tokens.colors.accent,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.PlayArrow,
+                            contentDescription = null,
+                            tint = tokens.colors.accent,
+                        )
+                    }
                     Text(
                         text = stringResource(Res.string.live_tv_button_continue),
                         style = MaterialTheme.typography.labelLarge,
@@ -695,6 +736,7 @@ private fun LazyListScope.liveTvChannelList(
     channels: List<LiveTvChannel>,
     favoriteChannelIds: Set<String>,
     uncategorizedGroupName: String,
+    launchingChannelId: String? = null,
     onFavoriteClick: (LiveTvChannel) -> Unit,
     onPlayClick: (LiveTvChannel) -> Unit,
 ) {
@@ -706,6 +748,7 @@ private fun LazyListScope.liveTvChannelList(
             channel = channel,
             categoryName = categoryNameForChannel(channel, uncategorizedGroupName),
             isFavorite = channel.id in favoriteChannelIds,
+            isLaunching = launchingChannelId == channel.id,
             onFavoriteClick = { onFavoriteClick(channel) },
             onPlayClick = { onPlayClick(channel) },
         )
@@ -717,6 +760,7 @@ private fun LiveTvChannelCard(
     channel: LiveTvChannel,
     categoryName: String,
     isFavorite: Boolean,
+    isLaunching: Boolean = false,
     onFavoriteClick: () -> Unit,
     onPlayClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -766,11 +810,19 @@ private fun LiveTvChannelCard(
                     .clickable(onClick = onPlayClick),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.PlayArrow,
-                    contentDescription = null,
-                    tint = tokens.colors.accent,
-                )
+                if (isLaunching) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = tokens.colors.accent,
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Rounded.PlayArrow,
+                        contentDescription = null,
+                        tint = tokens.colors.accent,
+                    )
+                }
             }
         }
     }

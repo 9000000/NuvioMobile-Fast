@@ -2420,6 +2420,10 @@
     <string name="live_tv_settings_save_playlist">Lưu</string>
     <string name="live_tv_settings_cancel_edit">Hủy</string>
     <string name="compose_player_channels">Kênh</string>
+    <string name="live_tv_filter_select_playlist">Chọn danh sách phát</string>
+    <string name="live_tv_filter_default_view">Mặc định (Gần đây &amp; Yêu thích)</string>
+    <string name="live_tv_empty_favorites_title">Chưa có kênh yêu thích</string>
+    <string name="live_tv_empty_favorites_message">Chọn danh sách phát để duyệt kênh và bấm biểu tượng ngôi sao để thêm vào yêu thích.</string>
     <string name="live_tv_filter_all_playlists">Tất cả danh sách phát</string>
     <string name="live_tv_filter_choose_playlist">All List</string>
     <string name="settings_playback_auto_skip_segments">Tự động bỏ qua</string>

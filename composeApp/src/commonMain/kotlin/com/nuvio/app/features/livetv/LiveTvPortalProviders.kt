@@ -63,6 +63,7 @@ private data class StalkerSession(
 )
 
 private var cachedStalkerSession: StalkerSession? = null
+private val stalkerLinkCache = mutableMapOf<String, Pair<kotlin.time.TimeMark, String>>()
 
 private val PLAYABLE_URL_REGEX = Regex("""(https?://[^\s"']+|rtmps?://[^\s"']+|rtsps?://[^\s"']+)""", RegexOption.IGNORE_CASE)
 
@@ -327,9 +328,16 @@ internal suspend fun preparePortalChannelForPlayback(channel: LiveTvChannel, set
         ?: channel.id.removePrefix("stalker:").takeIf(String::isNotBlank)
         ?: channel.streamUrl.takeIf(String::isNotBlank)
 
-    val resolvedUrl = if (!rawCommand.isNullOrBlank()) {
-        requestCreateLink(normalized, rawCommand, serverBaseUrl, forceRefreshSession = false)
+    val cached = stalkerLinkCache[channel.id]
+    val resolvedUrl = if (cached != null && cached.first.elapsedNow().inWholeMinutes < 10) {
+        cached.second
+    } else if (!rawCommand.isNullOrBlank()) {
+        val link = requestCreateLink(normalized, rawCommand, serverBaseUrl, forceRefreshSession = false)
             ?: requestCreateLink(normalized, rawCommand, serverBaseUrl, forceRefreshSession = true)
+        if (!link.isNullOrBlank()) {
+            stalkerLinkCache[channel.id] = Pair(kotlin.time.TimeSource.Monotonic.markNow(), link)
+        }
+        link
     } else null
 
     val channelIdOnly = channel.id.removePrefix("stalker:")
@@ -348,7 +356,7 @@ internal suspend fun preparePortalChannelForPlayback(channel: LiveTvChannel, set
         finalUrl.contains(".flv", ignoreCase = true) -> "flv"
         finalUrl.contains(".mp4", ignoreCase = true) -> "mp4"
         finalUrl.contains(".mkv", ignoreCase = true) -> "mkv"
-        else -> channel.streamType
+        else -> channel.streamType ?: "m3u8"
     }
 
     return channel.copy(

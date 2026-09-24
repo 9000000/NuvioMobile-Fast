@@ -89,17 +89,19 @@ internal fun LiveTvFilterPanelRow(
                 onPlaylistSelected = onPlaylistSelected,
             )
         }
-        LiveTvPanelFilterChip(
-            label = allLabel,
-            selected = selectedGroup.isNullOrBlank() && !favoritesOnly,
-            onClick = onAllSelected,
-        )
+        if (selectedPlaylist != null) {
+            LiveTvPanelFilterChip(
+                label = allLabel,
+                selected = selectedGroup.isNullOrBlank() && !favoritesOnly,
+                onClick = onAllSelected,
+            )
+        }
         LiveTvPanelFilterChip(
             label = favoritesLabel,
-            selected = favoritesOnly,
+            selected = favoritesOnly || selectedPlaylist == null,
             onClick = onFavoritesSelected,
         )
-        if (groups.isNotEmpty()) {
+        if (selectedPlaylist != null && groups.isNotEmpty()) {
             LiveTvCategoryPanelChip(
                 label = selectedGroup?.takeIf { it.isNotBlank() && !favoritesOnly } ?: categoryLabel,
                 selectedGroup = selectedGroup?.takeIf { it.isNotBlank() && !favoritesOnly },

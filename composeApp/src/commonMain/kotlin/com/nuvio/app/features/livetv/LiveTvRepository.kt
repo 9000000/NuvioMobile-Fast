@@ -21,6 +21,13 @@ object LiveTvRepository {
     private val _uiState = MutableStateFlow(LiveTvUiState())
     val uiState: StateFlow<LiveTvUiState> = _uiState.asStateFlow()
 
+    private val _navigationResetEvent = MutableStateFlow(0L)
+    val navigationResetEvent: StateFlow<Long> = _navigationResetEvent.asStateFlow()
+
+    fun requestResetToNavigationDefault() {
+        _navigationResetEvent.value += 1L
+    }
+
     private var hasLoaded = false
 
     fun ensureLoaded() {
@@ -288,36 +295,25 @@ object LiveTvRepository {
     fun removeXtream() = saveXtreamSettings(LiveTvXtreamSettings())
 
     suspend fun prepareForPlayback(channel: LiveTvChannel): LiveTvChannel {
-        val isStalker = channel.playlistId == STALKER_PLAYLIST_ID || !channel.stalkerCommand.isNullOrBlank()
-        val portalPrepared = if (isStalker) {
-            preparePortalChannelForPlayback(channel, _uiState.value.stalkerSettings)
-        } else {
-            val playlistSource = _uiState.value.playlists.firstOrNull { it.id == channel.playlistId }?.source
-                ?: _uiState.value.playlistUrl
-            val resolution = resolveStreamMetadata(channel.streamUrl, channel.headers, playlistSource)
-            if (resolution.finalUrl != channel.streamUrl || resolution.detectedType != null) {
-                channel.copy(
-                    streamUrl = resolution.finalUrl,
-                    streamType = resolution.detectedType ?: channel.streamType
-                )
-            } else {
-                channel
-            }
+        var prepared = channel
+        val isStalker = prepared.playlistId == STALKER_PLAYLIST_ID || !prepared.stalkerCommand.isNullOrBlank()
+        if (isStalker) {
+            prepared = preparePortalChannelForPlayback(prepared, _uiState.value.stalkerSettings)
         }
 
-        val isDrmOrMpd = !portalPrepared.drmKey.isNullOrBlank() ||
-            portalPrepared.streamType.equals("mpd", ignoreCase = true) ||
-            portalPrepared.streamUrl.contains(".mpd", ignoreCase = true)
+        val isDrmOrMpd = !prepared.drmKey.isNullOrBlank() ||
+            prepared.streamType.equals("mpd", ignoreCase = true) ||
+            prepared.streamUrl.contains(".mpd", ignoreCase = true)
 
-        val effectiveHeaders = portalPrepared.headers.toMutableMap()
+        val effectiveHeaders = prepared.headers.toMutableMap()
         if (effectiveHeaders.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
-            if (isDrmOrMpd || IptvHeaderProvider.isIptvStream(portalPrepared.streamUrl)) {
+            if (isDrmOrMpd || IptvHeaderProvider.isIptvStream(prepared.streamUrl)) {
                 effectiveHeaders["User-Agent"] = IptvHeaderProvider.DEFAULT_IPTV_USER_AGENT
             }
         }
 
-        var resolvedDrmKey = portalPrepared.drmKey
-        var resolvedDrmType = portalPrepared.drmType
+        var resolvedDrmKey = prepared.drmKey
+        var resolvedDrmType = prepared.drmType
 
         if (!resolvedDrmKey.isNullOrBlank() &&
             (resolvedDrmKey.startsWith("http://", ignoreCase = true) || resolvedDrmKey.startsWith("https://", ignoreCase = true))
@@ -327,12 +323,15 @@ object LiveTvRepository {
                 resolvedDrmKey.contains("cleankey", ignoreCase = true)
 
             if (isClearKey) {
-                val directJson = ClearKeyDrmUtil.buildClearKeyJson(resolvedDrmKey)
+                val currentDrmKey = resolvedDrmKey
+                val directJson = ClearKeyDrmUtil.buildClearKeyJson(currentDrmKey)
                 if (directJson != null) {
                     resolvedDrmKey = directJson
                     resolvedDrmType = "clearkey"
                 } else {
-                    val fetchedJson = ClearKeyDrmUtil.fetchClearKeyJson(resolvedDrmKey, effectiveHeaders)
+                    val fetchedJson = kotlinx.coroutines.withTimeoutOrNull(1500L) {
+                        ClearKeyDrmUtil.fetchClearKeyJson(currentDrmKey, effectiveHeaders)
+                    }
                     if (fetchedJson != null) {
                         resolvedDrmKey = fetchedJson
                         resolvedDrmType = "clearkey"
@@ -341,10 +340,21 @@ object LiveTvRepository {
             }
         }
 
-        return portalPrepared.copy(
+        val fallbackType = prepared.streamType ?: when {
+            prepared.streamUrl.contains(".flv", ignoreCase = true) -> "flv"
+            prepared.streamUrl.contains(".ts", ignoreCase = true) -> "ts"
+            prepared.streamUrl.contains(".mp4", ignoreCase = true) -> "mp4"
+            prepared.streamUrl.contains(".mkv", ignoreCase = true) -> "mkv"
+            prepared.streamUrl.contains(".mpd", ignoreCase = true) -> "mpd"
+            prepared.streamUrl.contains(".m3u8", ignoreCase = true) -> "m3u8"
+            else -> "m3u8"
+        }
+
+        return prepared.copy(
             headers = effectiveHeaders,
             drmKey = resolvedDrmKey,
             drmType = resolvedDrmType,
+            streamType = fallbackType,
         )
     }
 

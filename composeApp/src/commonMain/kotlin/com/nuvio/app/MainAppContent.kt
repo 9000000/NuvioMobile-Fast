@@ -386,6 +386,9 @@ internal fun MainAppContent(
     }
 
     fun activateTab(tab: AppScreenTab) {
+        if (tab == AppScreenTab.LiveTv) {
+            LiveTvRepository.requestResetToNavigationDefault()
+        }
         if (useNativeNavigation && onActivate != null) {
             onActivate(tab)
         } else {
@@ -406,7 +409,10 @@ internal fun MainAppContent(
                 searchScrollToTopRequests.tryEmit(Unit)
             }
             AppScreenTab.Library -> libraryScrollToTopRequests.tryEmit(Unit)
-            AppScreenTab.LiveTv -> liveTvScrollToTopRequests.tryEmit(Unit)
+            AppScreenTab.LiveTv -> {
+                LiveTvRepository.requestResetToNavigationDefault()
+                liveTvScrollToTopRequests.tryEmit(Unit)
+            }
             AppScreenTab.Settings -> settingsRootActionRequests.tryEmit(Unit)
         }
     }
@@ -1225,7 +1231,7 @@ internal fun MainAppContent(
                         playableChannel.streamUrl.contains(".mkv", ignoreCase = true) -> "mkv"
                         playableChannel.streamUrl.contains(".mpd", ignoreCase = true) -> "mpd"
                         playableChannel.streamUrl.contains(".m3u8", ignoreCase = true) -> "m3u8"
-                        else -> null
+                        else -> "m3u8"
                     }
                 val launchId = PlayerLaunchStore.put(
                     PlayerLaunch(

@@ -2432,6 +2432,10 @@
     <string name="live_tv_settings_save_playlist">Save</string>
     <string name="live_tv_settings_cancel_edit">Cancel</string>
     <string name="compose_player_channels">Channels</string>
+    <string name="live_tv_filter_select_playlist">Select Playlist</string>
+    <string name="live_tv_filter_default_view">Default (Recent &amp; Favorites)</string>
+    <string name="live_tv_empty_favorites_title">No favorite channels</string>
+    <string name="live_tv_empty_favorites_message">Select a playlist to browse channels and tap the star icon to add them to your favorites.</string>
     <string name="live_tv_filter_all_playlists">All playlists</string>
     <string name="live_tv_filter_choose_playlist">Playlists</string>
     <string name="settings_playback_auto_skip_segments">Automatic Skipping</string>
