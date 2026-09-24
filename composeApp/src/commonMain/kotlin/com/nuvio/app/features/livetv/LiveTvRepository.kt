@@ -2,6 +2,7 @@ package com.nuvio.app.features.livetv
 
 import co.touchlab.kermit.Logger
 import com.nuvio.app.features.addons.httpGetText
+import com.nuvio.app.features.player.ClearKeyDrmUtil
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -238,9 +239,55 @@ object LiveTvRepository {
     fun removeStalker() = saveStalkerSettings(LiveTvStalkerSettings())
     fun removeXtream() = saveXtreamSettings(LiveTvXtreamSettings())
 
-    suspend fun prepareForPlayback(channel: LiveTvChannel): LiveTvChannel =
-        if (channel.stalkerCommand.isNullOrBlank()) channel
-        else preparePortalChannelForPlayback(channel, _uiState.value.stalkerSettings)
+    suspend fun prepareForPlayback(channel: LiveTvChannel): LiveTvChannel {
+        val portalPrepared = if (channel.stalkerCommand.isNullOrBlank()) {
+            channel
+        } else {
+            preparePortalChannelForPlayback(channel, _uiState.value.stalkerSettings)
+        }
+
+        val isDrmOrMpd = !portalPrepared.drmKey.isNullOrBlank() ||
+            portalPrepared.streamType.equals("mpd", ignoreCase = true) ||
+            portalPrepared.streamUrl.contains(".mpd", ignoreCase = true)
+
+        val effectiveHeaders = portalPrepared.headers.toMutableMap()
+        if (effectiveHeaders.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
+            if (isDrmOrMpd || IptvHeaderProvider.isIptvStream(portalPrepared.streamUrl)) {
+                effectiveHeaders["User-Agent"] = IptvHeaderProvider.DEFAULT_IPTV_USER_AGENT
+            }
+        }
+
+        var resolvedDrmKey = portalPrepared.drmKey
+        var resolvedDrmType = portalPrepared.drmType
+
+        if (!resolvedDrmKey.isNullOrBlank() &&
+            (resolvedDrmKey.startsWith("http://", ignoreCase = true) || resolvedDrmKey.startsWith("https://", ignoreCase = true))
+        ) {
+            val isClearKey = resolvedDrmType.isNullOrBlank() ||
+                resolvedDrmType.contains("clearkey", ignoreCase = true) ||
+                resolvedDrmKey.contains("cleankey", ignoreCase = true)
+
+            if (isClearKey) {
+                val directJson = ClearKeyDrmUtil.buildClearKeyJson(resolvedDrmKey)
+                if (directJson != null) {
+                    resolvedDrmKey = directJson
+                    resolvedDrmType = "clearkey"
+                } else {
+                    val fetchedJson = ClearKeyDrmUtil.fetchClearKeyJson(resolvedDrmKey, effectiveHeaders)
+                    if (fetchedJson != null) {
+                        resolvedDrmKey = fetchedJson
+                        resolvedDrmType = "clearkey"
+                    }
+                }
+            }
+        }
+
+        return portalPrepared.copy(
+            headers = effectiveHeaders,
+            drmKey = resolvedDrmKey,
+            drmType = resolvedDrmType,
+        )
+    }
 
     fun refresh() {
         ensureLoaded()
@@ -402,6 +449,7 @@ internal fun parseM3uPlaylist(
     playlist: LiveTvPlaylist? = null,
 ): List<LiveTvChannel> {
     val channels = mutableListOf<LiveTvChannel>()
+    val playlistDefaultHeaders = mutableMapOf<String, String>()
     var pending = PendingM3uEntry()
 
     payload.lineSequence()
@@ -409,8 +457,20 @@ internal fun parseM3uPlaylist(
         .filter(String::isNotBlank)
         .forEach { line ->
             when {
+                line.startsWith("#EXTM3U", ignoreCase = true) -> {
+                    readM3uAttribute(line, "http-user-agent")?.let { playlistDefaultHeaders["User-Agent"] = it }
+                        ?: readM3uAttribute(line, "user-agent")?.let { playlistDefaultHeaders["User-Agent"] = it }
+                    readM3uAttribute(line, "http-referrer")?.let { playlistDefaultHeaders["Referer"] = it }
+                        ?: readM3uAttribute(line, "referrer")?.let { playlistDefaultHeaders["Referer"] = it }
+                        ?: readM3uAttribute(line, "referer")?.let { playlistDefaultHeaders["Referer"] = it }
+                }
                 line.startsWith("#EXTINF", ignoreCase = true) -> {
                     pending.info = parseExtInf(line)
+                    readM3uAttribute(line, "http-user-agent")?.let { pending.headers["User-Agent"] = it }
+                        ?: readM3uAttribute(line, "user-agent")?.let { pending.headers["User-Agent"] = it }
+                    readM3uAttribute(line, "http-referrer")?.let { pending.headers["Referer"] = it }
+                        ?: readM3uAttribute(line, "referrer")?.let { pending.headers["Referer"] = it }
+                        ?: readM3uAttribute(line, "referer")?.let { pending.headers["Referer"] = it }
                 }
                 line.startsWith("#KODIPROP:", ignoreCase = true) -> {
                     val prop = line.substringAfter("#KODIPROP:", "").trim()
@@ -433,14 +493,28 @@ internal fun parseM3uPlaylist(
                     val key = opt.substringBefore('=').trim()
                     val value = opt.substringAfter('=', "").trim()
                     when {
-                        key.equals("http-user-agent", ignoreCase = true) -> pending.headers["User-Agent"] = value
-                        key.equals("http-referrer", ignoreCase = true) -> pending.headers["Referer"] = value
+                        key.equals("http-user-agent", ignoreCase = true) ||
+                            key.equals("user-agent", ignoreCase = true) -> pending.headers["User-Agent"] = value
+                        key.equals("http-referrer", ignoreCase = true) ||
+                            key.equals("referrer", ignoreCase = true) ||
+                            key.equals("referer", ignoreCase = true) -> pending.headers["Referer"] = value
+                    }
+                }
+                line.startsWith("#EXTHTTP:", ignoreCase = true) -> {
+                    val json = line.substringAfter("#EXTHTTP:", "").trim()
+                    val uaMatch = Regex("""(?:"User-Agent"|"http-user-agent")\s*:\s*"([^"]+)""", RegexOption.IGNORE_CASE).find(json)
+                    if (uaMatch != null) {
+                        pending.headers["User-Agent"] = uaMatch.groupValues[1]
+                    }
+                    val refMatch = Regex("""(?:"Referer"|"referrer"|"http-referrer")\s*:\s*"([^"]+)""", RegexOption.IGNORE_CASE).find(json)
+                    if (refMatch != null) {
+                        pending.headers["Referer"] = refMatch.groupValues[1]
                     }
                 }
                 line.startsWith("#") -> Unit
                 else -> {
                     val (rawUrl, pipeHeaders) = parseUrlAndPipeHeaders(line)
-                    val combinedHeaders = (pending.headers + pipeHeaders).toMap()
+                    val combinedHeaders = (playlistDefaultHeaders + pending.headers + pipeHeaders).toMutableMap()
                     val info = pending.info
                     val streamUrl = rawUrl
                     val name = info?.name?.takeIf(String::isNotBlank)
@@ -458,6 +532,18 @@ internal fun parseM3uPlaylist(
                         else -> null
                     }
 
+                    if (combinedHeaders.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
+                        if (detectedDrmType != null || detectedStreamType == "mpd" || IptvHeaderProvider.isIptvStream(streamUrl)) {
+                            combinedHeaders["User-Agent"] = IptvHeaderProvider.DEFAULT_IPTV_USER_AGENT
+                        }
+                    }
+
+                    val effectiveDrmKey = pending.licenseKey?.let { rawKey ->
+                        ClearKeyDrmUtil.extractKeyFromUrl(rawKey)?.let { extracted ->
+                            ClearKeyDrmUtil.buildClearKeyJson(extracted)
+                        } ?: rawKey
+                    }
+
                     channels += LiveTvChannel(
                         id = stableChannelId(streamUrl, channels.size),
                         name = name,
@@ -466,10 +552,10 @@ internal fun parseM3uPlaylist(
                         group = info?.group?.takeIf(String::isNotBlank),
                         playlistId = playlist?.id,
                         playlistName = playlist?.name,
-                        headers = combinedHeaders,
+                        headers = combinedHeaders.toMap(),
                         streamType = detectedStreamType,
                         drmType = detectedDrmType,
-                        drmKey = pending.licenseKey,
+                        drmKey = effectiveDrmKey,
                     )
                     pending = PendingM3uEntry()
                 }

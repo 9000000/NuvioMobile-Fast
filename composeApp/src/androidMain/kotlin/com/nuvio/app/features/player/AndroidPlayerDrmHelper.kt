@@ -7,7 +7,9 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.drm.DefaultDrmSessionManager
 import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
 import androidx.media3.exoplayer.drm.FrameworkMediaDrm
+import androidx.media3.exoplayer.drm.HttpMediaDrmCallback
 import androidx.media3.exoplayer.drm.LocalMediaDrmCallback
+import com.nuvio.app.features.livetv.IptvHeaderProvider
 import java.util.UUID
 
 @OptIn(UnstableApi::class)
@@ -36,21 +38,29 @@ internal object AndroidPlayerDrmHelper {
         val key = drmKey?.trim()?.takeIf { it.isNotBlank() } ?: return mediaItemBuilder
         val uuid = resolveDrmSchemeUuid(drmType)
 
+        val effectiveHeaders = requestHeaders.toMutableMap()
+        if (effectiveHeaders.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
+            effectiveHeaders["User-Agent"] = IptvHeaderProvider.DEFAULT_IPTV_USER_AGENT
+        }
+
         if (isRemoteLicenseKey(key)) {
             val drmConfig = MediaItem.DrmConfiguration.Builder(uuid)
                 .setLicenseUri(key)
                 .apply {
-                    if (requestHeaders.isNotEmpty()) {
-                        setLicenseRequestHeaders(requestHeaders)
+                    if (effectiveHeaders.isNotEmpty()) {
+                        setLicenseRequestHeaders(effectiveHeaders)
                     }
                 }
+                .setMultiSession(true)
                 .build()
             return mediaItemBuilder.setDrmConfiguration(drmConfig)
         }
 
         val json = ClearKeyDrmUtil.buildClearKeyJson(key)
         if (json != null) {
-            val drmConfig = MediaItem.DrmConfiguration.Builder(C.CLEARKEY_UUID).build()
+            val drmConfig = MediaItem.DrmConfiguration.Builder(C.CLEARKEY_UUID)
+                .setMultiSession(true)
+                .build()
             return mediaItemBuilder.setDrmConfiguration(drmConfig)
         }
 
@@ -60,10 +70,32 @@ internal object AndroidPlayerDrmHelper {
     fun createDrmSessionManagerProvider(
         drmType: String?,
         drmKey: String?,
+        licenseHeaders: Map<String, String> = emptyMap(),
     ): DrmSessionManagerProvider? {
         val key = drmKey?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val uuid = resolveDrmSchemeUuid(drmType)
+
+        val effectiveHeaders = licenseHeaders.toMutableMap()
+        if (effectiveHeaders.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
+            effectiveHeaders["User-Agent"] = IptvHeaderProvider.DEFAULT_IPTV_USER_AGENT
+        }
+
         if (isRemoteLicenseKey(key)) {
-            return null
+            return DrmSessionManagerProvider { _ ->
+                val httpCallback = HttpMediaDrmCallback(
+                    key,
+                    PlayerPlaybackNetworking.createHttpDataSourceFactory(effectiveHeaders),
+                ).apply {
+                    effectiveHeaders.forEach { (hKey, hValue) ->
+                        setKeyRequestProperty(hKey, hValue)
+                    }
+                }
+                DefaultDrmSessionManager.Builder()
+                    .setUuidAndExoMediaDrmProvider(uuid, FrameworkMediaDrm.DEFAULT_PROVIDER)
+                    .setMultiSession(true)
+                    .setPlayClearSamplesWithoutKeys(true)
+                    .build(httpCallback)
+            }
         }
 
         val json = ClearKeyDrmUtil.buildClearKeyJson(key) ?: return null
@@ -72,6 +104,7 @@ internal object AndroidPlayerDrmHelper {
             DefaultDrmSessionManager.Builder()
                 .setUuidAndExoMediaDrmProvider(C.CLEARKEY_UUID, FrameworkMediaDrm.DEFAULT_PROVIDER)
                 .setMultiSession(true)
+                .setPlayClearSamplesWithoutKeys(true)
                 .build(callback)
         }
     }

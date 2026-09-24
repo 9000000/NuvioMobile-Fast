@@ -281,8 +281,12 @@ private fun ExoPlayerSurface(
     var fallbackStartPositionMs by remember(playerSourceKey) { mutableStateOf<Long?>(null) }
     val effectiveDecoderPriority = decoderPriorityOverride ?: playerSettings.decoderPriority
 
-    val drmSessionManagerProvider = remember(drmType, drmKey) {
-        AndroidPlayerDrmHelper.createDrmSessionManagerProvider(drmType = drmType, drmKey = drmKey)
+    val drmSessionManagerProvider = remember(drmType, drmKey, sanitizedSourceHeaders) {
+        AndroidPlayerDrmHelper.createDrmSessionManagerProvider(
+            drmType = drmType,
+            drmKey = drmKey,
+            licenseHeaders = sanitizedSourceHeaders,
+        )
     }
 
     var resolvedMediaItem by remember(playerSourceKey, externalSubtitles) {

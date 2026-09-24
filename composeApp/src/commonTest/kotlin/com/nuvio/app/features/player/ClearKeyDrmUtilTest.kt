@@ -61,4 +61,14 @@ class ClearKeyDrmUtilTest {
         assertNotNull(json)
         assertTrue(json.contains("\"kid\":"), "Should handle UUID formatted hex")
     }
+
+    @Test
+    fun parsesKeyFromUrlWithIdParameter() {
+        val url = "https://tv.vietanhtv.top/sex/cleankey.php?id=e7b9e0780287a38fe4c42faabfb6dc64:a38f4d4ba389ca038166c43fe11cf4e3"
+        val json = ClearKeyDrmUtil.buildClearKeyJson(url)
+        assertNotNull(json)
+        assertTrue(json.contains("\"keys\":["), "Should parse ClearKey JSON from URL parameter")
+        assertTrue(json.contains("57ngeAKHo4_kxC-qv7bcZA"), "Should contain base64url encoded kid")
+        assertTrue(json.contains("o49NS6OJygOBZsQ_4Rz04w"), "Should contain base64url encoded key")
+    }
 }

@@ -3,6 +3,7 @@ package com.nuvio.app.features.livetv
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class LiveTvRepositoryTest {
 
@@ -75,5 +76,48 @@ class LiveTvRepositoryTest {
         assertEquals("Discovery", channel.name)
         assertEquals("playlist-123", channel.playlistId)
         assertEquals("My IPTV List", channel.playlistName)
+    }
+
+    @Test
+    fun parseM3uWithPlaylistLevelHeadersInherited() {
+        val playlist = """
+            #EXTM3U http-user-agent="GlobalAgent/1.0" http-referrer="https://global.tv"
+            #EXTINF:-1 tvg-name="Channel 1",Channel 1
+            https://stream.example.com/ch1.m3u8
+            #EXTVLCOPT:user-agent=ChannelOverrideAgent/2.0
+            #EXTINF:-1 tvg-name="Channel 2",Channel 2
+            https://stream.example.com/ch2.m3u8
+        """.trimIndent()
+
+        val channels = parseM3uPlaylist(playlist)
+        assertEquals(2, channels.size)
+
+        val ch1 = channels[0]
+        assertEquals("GlobalAgent/1.0", ch1.headers["User-Agent"])
+        assertEquals("https://global.tv", ch1.headers["Referer"])
+
+        val ch2 = channels[1]
+        assertEquals("ChannelOverrideAgent/2.0", ch2.headers["User-Agent"])
+        assertEquals("https://global.tv", ch2.headers["Referer"])
+    }
+
+    @Test
+    fun parseM3uDrmUrlKeyExtractionAndDefaultIptvUserAgent() {
+        val playlist = """
+            #EXTM3U
+            #KODIPROP:inputstream.adaptive.license_type=clearkey
+            #KODIPROP:inputstream.adaptive.license_key=https://tv.vietanhtv.top/sex/cleankey.php?id=e7b9e0780287a38fe4c42faabfb6dc64:a38f4d4ba389ca038166c43fe11cf4e3
+            #KODIPROP:inputstream.adaptive.manifest_type=mpd
+            #EXTINF:-1 tvg-name="VTV3 Backup",VTV3 Backup
+            https://stream.example.com/vtv3/manifest.mpd
+        """.trimIndent()
+
+        val channels = parseM3uPlaylist(playlist)
+        assertEquals(1, channels.size)
+
+        val ch = channels.first()
+        assertEquals(IptvHeaderProvider.DEFAULT_IPTV_USER_AGENT, ch.headers["User-Agent"])
+        assertNotNull(ch.drmKey)
+        assertTrue(ch.drmKey!!.contains("\"keys\":["), "Direct URL id parameter should be extracted to JSON")
     }
 }
