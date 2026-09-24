@@ -236,6 +236,53 @@ object LiveTvRepository {
         refresh()
     }
 
+    suspend fun testAndSaveXtreamSettings(settings: LiveTvXtreamSettings): Result<Int> {
+        val normalized = settings.copy(
+            serverUrl = settings.serverUrl.trim().trimEnd('/').substringBefore("/player_api.php").trimEnd('/'),
+            username = settings.username.trim(),
+            password = settings.password.trim(),
+            isEnabled = true,
+        )
+        if (normalized.serverUrl.isBlank() || normalized.username.isBlank() || normalized.password.isBlank()) {
+            return Result.failure(IllegalArgumentException("Vui lòng điền đầy đủ Server URL, Username và Password"))
+        }
+
+        return withContext(Dispatchers.Default) {
+            runCatching {
+                val channels = fetchXtreamChannels(normalized)
+                if (channels.isEmpty()) {
+                    throw IllegalStateException("Không tìm thấy kênh nào trên máy chủ Xtream này.")
+                }
+                saveXtreamSettings(normalized)
+                channels.size
+            }
+        }
+    }
+
+    suspend fun testAndSaveStalkerSettings(settings: LiveTvStalkerSettings): Result<Int> {
+        val normalized = settings.copy(
+            portalUrl = settings.portalUrl.trim().trimEnd('/'),
+            macAddress = settings.macAddress.trim().uppercase(),
+            username = settings.username.trim(),
+            password = settings.password.trim(),
+            isEnabled = true,
+        )
+        if (normalized.portalUrl.isBlank() || normalized.macAddress.isBlank()) {
+            return Result.failure(IllegalArgumentException("Vui lòng điền Portal URL và MAC Address"))
+        }
+
+        return withContext(Dispatchers.Default) {
+            runCatching {
+                val channels = fetchStalkerChannels(normalized)
+                if (channels.isEmpty()) {
+                    throw IllegalStateException("Không tìm thấy kênh nào trên Stalker Portal này.")
+                }
+                saveStalkerSettings(normalized)
+                channels.size
+            }
+        }
+    }
+
     fun removeStalker() = saveStalkerSettings(LiveTvStalkerSettings())
     fun removeXtream() = saveXtreamSettings(LiveTvXtreamSettings())
 

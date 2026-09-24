@@ -126,8 +126,35 @@ fun LiveTvScreen(
     val allPlaylistsLabel = stringResource(Res.string.live_tv_filter_all_playlists)
     val choosePlaylistLabel = stringResource(Res.string.live_tv_filter_choose_playlist)
 
-    val activePlaylists = remember(uiState.playlists) {
-        uiState.playlists.filter { it.isEnabled }
+    val activePlaylists = remember(uiState.playlists, uiState.channels, uiState.xtreamSettings, uiState.stalkerSettings) {
+        val idsWithChannels = uiState.channels.mapNotNull { it.playlistId }.toSet()
+        val m3uPlaylists = uiState.playlists.filter { it.isEnabled && it.id in idsWithChannels }
+
+        buildList {
+            addAll(m3uPlaylists)
+            if (uiState.xtreamSettings.isConfigured && uiState.xtreamSettings.isEnabled && XTREAM_PLAYLIST_ID in idsWithChannels) {
+                add(
+                    LiveTvPlaylist(
+                        id = XTREAM_PLAYLIST_ID,
+                        name = "Xtream",
+                        type = LiveTvPlaylistType.Url,
+                        source = uiState.xtreamSettings.serverUrl,
+                        isEnabled = true,
+                    )
+                )
+            }
+            if (uiState.stalkerSettings.isConfigured && uiState.stalkerSettings.isEnabled && STALKER_PLAYLIST_ID in idsWithChannels) {
+                add(
+                    LiveTvPlaylist(
+                        id = STALKER_PLAYLIST_ID,
+                        name = "Stalker Portal",
+                        type = LiveTvPlaylistType.Url,
+                        source = uiState.stalkerSettings.portalUrl,
+                        isEnabled = true,
+                    )
+                )
+            }
+        }
     }
     val selectedPlaylist = remember(activePlaylists, selectedPlaylistId) {
         activePlaylists.firstOrNull { it.id == selectedPlaylistId }

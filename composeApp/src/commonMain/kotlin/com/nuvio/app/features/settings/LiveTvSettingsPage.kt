@@ -1,12 +1,17 @@
 package com.nuvio.app.features.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -18,6 +23,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -33,9 +39,15 @@ import com.nuvio.app.features.livetv.LiveTvRepository
 import com.nuvio.app.features.livetv.LiveTvStalkerSettings
 import com.nuvio.app.features.livetv.LiveTvUiState
 import com.nuvio.app.features.livetv.LiveTvXtreamSettings
+import com.nuvio.app.features.livetv.STALKER_PLAYLIST_ID
+import com.nuvio.app.features.livetv.XTREAM_PLAYLIST_ID
 import com.nuvio.app.features.livetv.rememberLiveTvPlaylistFilePicker
+import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_remove
+import nuvio.composeapp.generated.resources.live_tv_connect
+import nuvio.composeapp.generated.resources.live_tv_disconnect
+import nuvio.composeapp.generated.resources.live_tv_password
 import nuvio.composeapp.generated.resources.live_tv_settings_add_local_playlist
 import nuvio.composeapp.generated.resources.live_tv_settings_add_url_playlist
 import nuvio.composeapp.generated.resources.live_tv_settings_cancel_edit
@@ -60,9 +72,6 @@ import nuvio.composeapp.generated.resources.live_tv_settings_save_playlist
 import nuvio.composeapp.generated.resources.live_tv_settings_section_navigation
 import nuvio.composeapp.generated.resources.live_tv_settings_section_playlist
 import nuvio.composeapp.generated.resources.live_tv_settings_section_providers
-import nuvio.composeapp.generated.resources.live_tv_connect
-import nuvio.composeapp.generated.resources.live_tv_disconnect
-import nuvio.composeapp.generated.resources.live_tv_password
 import nuvio.composeapp.generated.resources.live_tv_stalker_description
 import nuvio.composeapp.generated.resources.live_tv_stalker_mac
 import nuvio.composeapp.generated.resources.live_tv_stalker_portal
@@ -128,41 +137,253 @@ internal fun LazyListScope.liveTvSettingsContent(
 @Composable
 private fun LiveTvProviderSettingsRow(isTablet: Boolean, uiState: LiveTvUiState) {
     val padding = if (isTablet) 20.dp else 16.dp
+    val scope = rememberCoroutineScope()
+
     var xtreamServer by rememberSaveable(uiState.xtreamSettings.serverUrl) { mutableStateOf(uiState.xtreamSettings.serverUrl) }
     var xtreamUser by rememberSaveable(uiState.xtreamSettings.username) { mutableStateOf(uiState.xtreamSettings.username) }
     var xtreamPassword by rememberSaveable(uiState.xtreamSettings.password) { mutableStateOf(uiState.xtreamSettings.password) }
+    var isConnectingXtream by rememberSaveable { mutableStateOf(false) }
+    var xtreamFeedback by rememberSaveable { mutableStateOf<String?>(null) }
+    var xtreamFeedbackIsError by rememberSaveable { mutableStateOf(false) }
+
     var stalkerPortal by rememberSaveable(uiState.stalkerSettings.portalUrl) { mutableStateOf(uiState.stalkerSettings.portalUrl) }
     var stalkerMac by rememberSaveable(uiState.stalkerSettings.macAddress) { mutableStateOf(uiState.stalkerSettings.macAddress) }
     var stalkerUser by rememberSaveable(uiState.stalkerSettings.username) { mutableStateOf(uiState.stalkerSettings.username) }
     var stalkerPassword by rememberSaveable(uiState.stalkerSettings.password) { mutableStateOf(uiState.stalkerSettings.password) }
+    var isConnectingStalker by rememberSaveable { mutableStateOf(false) }
+    var stalkerFeedback by rememberSaveable { mutableStateOf<String?>(null) }
+    var stalkerFeedbackIsError by rememberSaveable { mutableStateOf(false) }
+
+    val xtreamChannelCount = uiState.channels.count { it.playlistId == XTREAM_PLAYLIST_ID }
+    val stalkerChannelCount = uiState.channels.count { it.playlistId == STALKER_PLAYLIST_ID }
 
     Column(Modifier.fillMaxWidth().padding(padding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(stringResource(Res.string.live_tv_xtream_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(stringResource(Res.string.live_tv_xtream_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (uiState.xtreamSettings.isConfigured) {
+                Text(
+                    text = if (xtreamChannelCount > 0) "✅ Đã kết nối ($xtreamChannelCount kênh)" else "✅ Đã kết nối",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LiveTvPlaylistEnabledColor,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
         Text(stringResource(Res.string.live_tv_xtream_description), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedTextField(xtreamServer, { xtreamServer = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text(stringResource(Res.string.live_tv_xtream_server)) })
-        OutlinedTextField(xtreamUser, { xtreamUser = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text(stringResource(Res.string.live_tv_username)) })
-        OutlinedTextField(xtreamPassword, { xtreamPassword = it }, Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), label = { Text(stringResource(Res.string.live_tv_password)) })
+
+        if (xtreamFeedback != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        color = if (xtreamFeedbackIsError) MaterialTheme.colorScheme.error.copy(alpha = 0.12f) else LiveTvPlaylistEnabledColor.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .padding(10.dp)
+            ) {
+                Text(
+                    text = xtreamFeedback ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (xtreamFeedbackIsError) MaterialTheme.colorScheme.error else LiveTvPlaylistEnabledColor,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        OutlinedTextField(
+            xtreamServer,
+            { xtreamServer = it; xtreamFeedback = null },
+            Modifier.fillMaxWidth(),
+            singleLine = true,
+            enabled = !isConnectingXtream,
+            label = { Text(stringResource(Res.string.live_tv_xtream_server)) }
+        )
+        OutlinedTextField(
+            xtreamUser,
+            { xtreamUser = it; xtreamFeedback = null },
+            Modifier.fillMaxWidth(),
+            singleLine = true,
+            enabled = !isConnectingXtream,
+            label = { Text(stringResource(Res.string.live_tv_username)) }
+        )
+        OutlinedTextField(
+            xtreamPassword,
+            { xtreamPassword = it; xtreamFeedback = null },
+            Modifier.fillMaxWidth(),
+            singleLine = true,
+            enabled = !isConnectingXtream,
+            visualTransformation = PasswordVisualTransformation(),
+            label = { Text(stringResource(Res.string.live_tv_password)) }
+        )
+
+        if (isConnectingXtream) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                Text(
+                    text = "Đang kết nối tới máy chủ Xtream...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                onClick = { LiveTvRepository.saveXtreamSettings(LiveTvXtreamSettings(xtreamServer, xtreamUser, xtreamPassword)) },
-                enabled = xtreamServer.isNotBlank() && xtreamUser.isNotBlank() && xtreamPassword.isNotBlank(),
-            ) { Text(stringResource(Res.string.live_tv_connect)) }
-            if (uiState.xtreamSettings.isConfigured) OutlinedButton(onClick = LiveTvRepository::removeXtream) { Text(stringResource(Res.string.live_tv_disconnect)) }
+                onClick = {
+                    scope.launch {
+                        isConnectingXtream = true
+                        xtreamFeedback = null
+                        val result = LiveTvRepository.testAndSaveXtreamSettings(
+                            LiveTvXtreamSettings(xtreamServer.trim(), xtreamUser.trim(), xtreamPassword.trim())
+                        )
+                        isConnectingXtream = false
+                        result.onSuccess { count ->
+                            xtreamFeedbackIsError = false
+                            xtreamFeedback = "Kết nối Xtream thành công! Đã tải $count kênh."
+                        }.onFailure { err ->
+                            xtreamFeedbackIsError = true
+                            xtreamFeedback = err.message ?: "Kết nối Xtream thất bại."
+                        }
+                    }
+                },
+                enabled = xtreamServer.isNotBlank() && xtreamUser.isNotBlank() && xtreamPassword.isNotBlank() && !isConnectingXtream,
+            ) {
+                Text(if (isConnectingXtream) "Đang kết nối..." else stringResource(Res.string.live_tv_connect))
+            }
+            if (uiState.xtreamSettings.isConfigured && !isConnectingXtream) {
+                OutlinedButton(onClick = {
+                    LiveTvRepository.removeXtream()
+                    xtreamFeedback = null
+                }) {
+                    Text(stringResource(Res.string.live_tv_disconnect))
+                }
+            }
         }
 
         HorizontalDivider()
-        Text(stringResource(Res.string.live_tv_stalker_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(stringResource(Res.string.live_tv_stalker_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (uiState.stalkerSettings.isConfigured) {
+                Text(
+                    text = if (stalkerChannelCount > 0) "✅ Đã kết nối ($stalkerChannelCount kênh)" else "✅ Đã kết nối",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LiveTvPlaylistEnabledColor,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
         Text(stringResource(Res.string.live_tv_stalker_description), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedTextField(stalkerPortal, { stalkerPortal = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text(stringResource(Res.string.live_tv_stalker_portal)) })
-        OutlinedTextField(stalkerMac, { stalkerMac = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text(stringResource(Res.string.live_tv_stalker_mac)) })
-        OutlinedTextField(stalkerUser, { stalkerUser = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text(stringResource(Res.string.live_tv_username)) })
-        OutlinedTextField(stalkerPassword, { stalkerPassword = it }, Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), label = { Text(stringResource(Res.string.live_tv_password)) })
+
+        if (stalkerFeedback != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        color = if (stalkerFeedbackIsError) MaterialTheme.colorScheme.error.copy(alpha = 0.12f) else LiveTvPlaylistEnabledColor.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .padding(10.dp)
+            ) {
+                Text(
+                    text = stalkerFeedback ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (stalkerFeedbackIsError) MaterialTheme.colorScheme.error else LiveTvPlaylistEnabledColor,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        OutlinedTextField(
+            stalkerPortal,
+            { stalkerPortal = it; stalkerFeedback = null },
+            Modifier.fillMaxWidth(),
+            singleLine = true,
+            enabled = !isConnectingStalker,
+            label = { Text(stringResource(Res.string.live_tv_stalker_portal)) }
+        )
+        OutlinedTextField(
+            stalkerMac,
+            { stalkerMac = it.uppercase(); stalkerFeedback = null },
+            Modifier.fillMaxWidth(),
+            singleLine = true,
+            enabled = !isConnectingStalker,
+            label = { Text(stringResource(Res.string.live_tv_stalker_mac)) }
+        )
+        OutlinedTextField(
+            stalkerUser,
+            { stalkerUser = it; stalkerFeedback = null },
+            Modifier.fillMaxWidth(),
+            singleLine = true,
+            enabled = !isConnectingStalker,
+            label = { Text(stringResource(Res.string.live_tv_username)) }
+        )
+        OutlinedTextField(
+            stalkerPassword,
+            { stalkerPassword = it; stalkerFeedback = null },
+            Modifier.fillMaxWidth(),
+            singleLine = true,
+            enabled = !isConnectingStalker,
+            visualTransformation = PasswordVisualTransformation(),
+            label = { Text(stringResource(Res.string.live_tv_password)) }
+        )
+
+        if (isConnectingStalker) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                Text(
+                    text = "Đang kết nối tới Stalker Portal...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                onClick = { LiveTvRepository.saveStalkerSettings(LiveTvStalkerSettings(stalkerPortal, stalkerMac, stalkerUser, stalkerPassword)) },
-                enabled = stalkerPortal.isNotBlank() && stalkerMac.isNotBlank(),
-            ) { Text(stringResource(Res.string.live_tv_connect)) }
-            if (uiState.stalkerSettings.isConfigured) OutlinedButton(onClick = LiveTvRepository::removeStalker) { Text(stringResource(Res.string.live_tv_disconnect)) }
+                onClick = {
+                    scope.launch {
+                        isConnectingStalker = true
+                        stalkerFeedback = null
+                        val result = LiveTvRepository.testAndSaveStalkerSettings(
+                            LiveTvStalkerSettings(stalkerPortal.trim(), stalkerMac.trim(), stalkerUser.trim(), stalkerPassword.trim())
+                        )
+                        isConnectingStalker = false
+                        result.onSuccess { count ->
+                            stalkerFeedbackIsError = false
+                            stalkerFeedback = "Kết nối Stalker Portal thành công! Đã tải $count kênh."
+                        }.onFailure { err ->
+                            stalkerFeedbackIsError = true
+                            stalkerFeedback = err.message ?: "Kết nối Stalker Portal thất bại."
+                        }
+                    }
+                },
+                enabled = stalkerPortal.isNotBlank() && stalkerMac.isNotBlank() && !isConnectingStalker,
+            ) {
+                Text(if (isConnectingStalker) "Đang kết nối..." else stringResource(Res.string.live_tv_connect))
+            }
+            if (uiState.stalkerSettings.isConfigured && !isConnectingStalker) {
+                OutlinedButton(onClick = {
+                    LiveTvRepository.removeStalker()
+                    stalkerFeedback = null
+                }) {
+                    Text(stringResource(Res.string.live_tv_disconnect))
+                }
+            }
         }
     }
 }
