@@ -120,4 +120,61 @@ class LiveTvRepositoryTest {
         assertNotNull(ch.drmKey)
         assertTrue(ch.drmKey!!.contains("\"keys\":["), "Direct URL id parameter should be extracted to JSON")
     }
+
+    @Test
+    fun testFavoritesRetainsAllChannelsAcrossPlaylists() {
+        val ch1 = LiveTvChannel(
+            id = "ch-1",
+            name = "VTV1",
+            streamUrl = "https://vtv1.stream",
+            playlistId = "playlist-a",
+            group = "News",
+        )
+        val ch2 = LiveTvChannel(
+            id = "ch-2",
+            name = "HBO",
+            streamUrl = "https://hbo.stream",
+            playlistId = "playlist-b",
+            group = "Movies",
+        )
+        val ch3 = LiveTvChannel(
+            id = "ch-3",
+            name = "Discovery",
+            streamUrl = "https://discovery.stream",
+            playlistId = "playlist-b",
+            group = "Documentary",
+        )
+
+        val allChannels = listOf(ch1, ch2, ch3)
+        val playlistAChannels = listOf(ch1)
+        val favoriteIds = setOf("ch-1", "ch-2")
+
+        // When in Favorites mode, even if playlist A is selected, all favorites from all playlists are retained
+        val favResult = filterLiveTvChannels(
+            channels = playlistAChannels,
+            allChannels = allChannels,
+            favoriteChannelIds = favoriteIds,
+            filterMode = LiveTvChannelFilterMode.Favorites,
+            selectedCategoryName = null,
+            searchQuery = "",
+            uncategorizedGroupName = "Uncategorized",
+        )
+        assertEquals(2, favResult.size)
+        assertTrue(favResult.any { it.id == "ch-1" })
+        assertTrue(favResult.any { it.id == "ch-2" })
+
+        // When in All mode, only playlist A channels are displayed
+        val allResult = filterLiveTvChannels(
+            channels = playlistAChannels,
+            allChannels = allChannels,
+            favoriteChannelIds = favoriteIds,
+            filterMode = LiveTvChannelFilterMode.All,
+            selectedCategoryName = null,
+            searchQuery = "",
+            uncategorizedGroupName = "Uncategorized",
+        )
+        assertEquals(1, allResult.size)
+        assertEquals("ch-1", allResult.first().id)
+    }
 }
+

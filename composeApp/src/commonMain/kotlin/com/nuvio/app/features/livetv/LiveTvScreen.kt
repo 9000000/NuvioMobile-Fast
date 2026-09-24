@@ -160,7 +160,7 @@ fun LiveTvScreen(
         activePlaylists.firstOrNull { it.id == selectedPlaylistId }
     }
 
-    val channelsInPlaylist = remember(uiState.channels, selectedPlaylistId) {
+    val channelsInPlaylist = remember(uiState.channels, selectedPlaylistId, selectedPlaylist) {
         if (selectedPlaylistId == null) {
             uiState.channels
         } else {
@@ -186,6 +186,7 @@ fun LiveTvScreen(
 
     val visibleChannels = remember(
         channelsInPlaylist,
+        uiState.channels,
         uiState.favoriteChannelIds,
         filterMode,
         selectedCategoryName,
@@ -194,6 +195,7 @@ fun LiveTvScreen(
     ) {
         filterLiveTvChannels(
             channels = channelsInPlaylist,
+            allChannels = uiState.channels,
             favoriteChannelIds = uiState.favoriteChannelIds,
             filterMode = filterMode,
             selectedCategoryName = selectedCategoryName,
@@ -853,7 +855,7 @@ private fun ChannelLogo(
     }
 }
 
-private enum class LiveTvChannelFilterMode {
+internal enum class LiveTvChannelFilterMode {
     All,
     Favorites,
     Category,
@@ -891,16 +893,18 @@ private fun buildLiveTvCategoryFilterOptions(
     }
 }
 
-private fun filterLiveTvChannels(
+internal fun filterLiveTvChannels(
     channels: List<LiveTvChannel>,
+    allChannels: List<LiveTvChannel> = channels,
     favoriteChannelIds: Set<String>,
     filterMode: LiveTvChannelFilterMode,
     selectedCategoryName: String?,
     searchQuery: String,
     uncategorizedGroupName: String,
 ): List<LiveTvChannel> {
+    val sourceChannels = if (filterMode == LiveTvChannelFilterMode.Favorites) allChannels else channels
     val normalizedQuery = searchQuery.trim().lowercase()
-    return channels
+    return sourceChannels
         .asSequence()
         .filter { channel ->
             when (filterMode) {

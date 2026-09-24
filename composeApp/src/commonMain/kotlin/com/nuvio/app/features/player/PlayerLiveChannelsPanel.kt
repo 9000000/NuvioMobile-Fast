@@ -145,6 +145,7 @@ fun PlayerLiveChannelsPanel(
     }
     val visibleChannels = remember(
         channelsInPlaylist,
+        channels,
         favoriteChannelIds,
         filterMode,
         selectedCategoryName,
@@ -153,6 +154,7 @@ fun PlayerLiveChannelsPanel(
     ) {
         filterPlayerLiveChannels(
             channels = channelsInPlaylist,
+            allChannels = channels,
             favoriteChannelIds = favoriteChannelIds,
             filterMode = filterMode,
             selectedCategoryName = selectedCategoryName,
@@ -784,14 +786,16 @@ private fun buildPlayerLiveChannelCategoryFilterOptions(
 
 private fun filterPlayerLiveChannels(
     channels: List<LiveTvChannel>,
+    allChannels: List<LiveTvChannel> = channels,
     favoriteChannelIds: Set<String>,
     filterMode: PlayerLiveChannelFilterMode,
     selectedCategoryName: String?,
     searchQuery: String,
     uncategorizedGroupName: String,
 ): List<LiveTvChannel> {
+    val sourceChannels = if (filterMode == PlayerLiveChannelFilterMode.Favorites) allChannels else channels
     val normalizedQuery = searchQuery.trim().lowercase()
-    return channels
+    return sourceChannels
         .asSequence()
         .filter { channel ->
             when (filterMode) {
