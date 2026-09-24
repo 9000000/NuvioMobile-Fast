@@ -2453,15 +2453,6 @@
     <string name="compose_player_show_remaining_time">Hiển thị thời gian còn lại</string>
     <string name="compose_player_brightness">Độ sáng</string>
     <string name="compose_player_volume">Âm lượng</string>
-    <string name="action_collapse">Thu gọn</string>
-    <string name="action_expand">Mở rộng</string>
-    <string name="settings_custom_poster_title">NGUỒN POSTER TÙY CHỈNH</string>
-    <string name="settings_custom_poster_description">Cung cấp mẫu URL poster từ dịch vụ bên ngoài. Nếu không có giá trị cho một mục, poster gốc sẽ được sử dụng thay thế.</string>
-    <string name="settings_custom_poster_placeholder">https://example.com/poster?id={id}&amp;id_type={id_type}&amp;type={type}</string>
-    <string name="settings_custom_poster_active">Nguồn poster tùy chỉnh đang hoạt động</string>
-    <string name="settings_custom_poster_none">Chưa cấu hình mẫu URL</string>
-    <string name="settings_custom_poster_save">Lưu</string>
-    <string name="settings_custom_poster_clear">Xóa</string>
-    <string name="settings_tracking_not_connected">Chưa kết nối</string>
 </resources>
+
 
