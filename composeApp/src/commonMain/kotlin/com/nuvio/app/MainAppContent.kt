@@ -1217,13 +1217,23 @@ internal fun MainAppContent(
                 val playableChannel = runCatching {
                     LiveTvRepository.prepareForPlayback(channel)
                 }.getOrDefault(channel)
+                val effectiveStreamType = playableChannel.streamType?.takeIf(String::isNotBlank)
+                    ?: when {
+                        playableChannel.streamUrl.contains(".flv", ignoreCase = true) -> "flv"
+                        playableChannel.streamUrl.contains(".ts", ignoreCase = true) -> "ts"
+                        playableChannel.streamUrl.contains(".mp4", ignoreCase = true) -> "mp4"
+                        playableChannel.streamUrl.contains(".mkv", ignoreCase = true) -> "mkv"
+                        playableChannel.streamUrl.contains(".mpd", ignoreCase = true) -> "mpd"
+                        playableChannel.streamUrl.contains(".m3u8", ignoreCase = true) -> "m3u8"
+                        else -> null
+                    }
                 val launchId = PlayerLaunchStore.put(
                     PlayerLaunch(
                         profileId = activePlaybackProfileId,
                         title = playableChannel.name,
                         sourceUrl = playableChannel.streamUrl,
                         sourceHeaders = playableChannel.headers,
-                        streamType = playableChannel.streamType,
+                        streamType = effectiveStreamType,
                         logo = playableChannel.logoUrl,
                         streamTitle = playableChannel.name,
                         streamSubtitle = playableChannel.group,

@@ -2,6 +2,7 @@ package com.nuvio.app.features.livetv
 
 import co.touchlab.kermit.Logger
 import com.nuvio.app.features.addons.httpGetText
+import com.nuvio.app.features.addons.httpRequestRaw
 import com.nuvio.app.features.player.ClearKeyDrmUtil
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -287,10 +288,21 @@ object LiveTvRepository {
     fun removeXtream() = saveXtreamSettings(LiveTvXtreamSettings())
 
     suspend fun prepareForPlayback(channel: LiveTvChannel): LiveTvChannel {
-        val portalPrepared = if (channel.stalkerCommand.isNullOrBlank()) {
-            channel
-        } else {
+        val isStalker = channel.playlistId == STALKER_PLAYLIST_ID || !channel.stalkerCommand.isNullOrBlank()
+        val portalPrepared = if (isStalker) {
             preparePortalChannelForPlayback(channel, _uiState.value.stalkerSettings)
+        } else {
+            val playlistSource = _uiState.value.playlists.firstOrNull { it.id == channel.playlistId }?.source
+                ?: _uiState.value.playlistUrl
+            val resolution = resolveStreamMetadata(channel.streamUrl, channel.headers, playlistSource)
+            if (resolution.finalUrl != channel.streamUrl || resolution.detectedType != null) {
+                channel.copy(
+                    streamUrl = resolution.finalUrl,
+                    streamType = resolution.detectedType ?: channel.streamType
+                )
+            } else {
+                channel
+            }
         }
 
         val isDrmOrMpd = !portalPrepared.drmKey.isNullOrBlank() ||
@@ -334,6 +346,124 @@ object LiveTvRepository {
             drmKey = resolvedDrmKey,
             drmType = resolvedDrmType,
         )
+    }
+
+
+    private data class StreamResolutionResult(
+        val finalUrl: String,
+        val detectedType: String?
+    )
+
+    private fun extractHost(url: String): String? {
+        val withoutScheme = url.substringAfter("://", "")
+        if (withoutScheme.isBlank()) return null
+        return withoutScheme.substringBefore('/').substringBefore(':').trim().takeIf(String::isNotBlank)
+    }
+
+    private suspend fun resolveStreamMetadata(
+        initialUrl: String,
+        headers: Map<String, String>,
+        playlistSourceUrl: String?
+    ): StreamResolutionResult = withContext(Dispatchers.Default) {
+        runCatching {
+            var currentUrl = initialUrl
+
+            // 1. Smart DNS Fallback: Nếu stream host bị lỗi DNS (NXDOMAIN) nhưng có chung root domain với playlist host, tự động fallback sang playlist host
+            val playlistHost = playlistSourceUrl?.let(::extractHost)?.takeIf { it.isNotBlank() }
+            val streamHost = extractHost(currentUrl)
+
+            if (!streamHost.isNullOrBlank() && !playlistHost.isNullOrBlank() && !streamHost.equals(playlistHost, ignoreCase = true)) {
+                val streamParts = streamHost.split('.')
+                val playlistParts = playlistHost.split('.')
+                if (streamParts.size >= 2 && playlistParts.size >= 2) {
+                    val streamRoot = streamParts.takeLast(2).joinToString(".")
+                    val playlistRoot = playlistParts.takeLast(2).joinToString(".")
+                    if (streamRoot.equals(playlistRoot, ignoreCase = true)) {
+                        val ping = runCatching {
+                            httpRequestRaw(
+                                method = "GET",
+                                url = currentUrl,
+                                headers = headers,
+                                body = "",
+                                followRedirects = false,
+                                maxResponseBodyBytes = 128
+                            )
+                        }
+                        if (ping.isFailure) {
+                            currentUrl = currentUrl.replaceFirst("://$streamHost", "://$playlistHost")
+                        }
+                    }
+                }
+            }
+
+            // 2. Fast Startup: Nếu URL tĩnh đã có extension chuẩn (.m3u8, .mpd, .ts) và không phải dynamic link, trả về ngay
+            val hasStaticExtension = currentUrl.contains(".m3u8", ignoreCase = true) ||
+                currentUrl.contains(".mpd", ignoreCase = true) ||
+                currentUrl.contains(".ts", ignoreCase = true) ||
+                currentUrl.contains(".flv", ignoreCase = true) ||
+                currentUrl.contains(".mp4", ignoreCase = true) ||
+                currentUrl.contains(".mkv", ignoreCase = true)
+
+            val isDynamicUrl = currentUrl.contains(".php", ignoreCase = true) ||
+                currentUrl.contains(".ashx", ignoreCase = true) ||
+                currentUrl.contains("/get", ignoreCase = true) ||
+                !hasStaticExtension
+
+            if (!isDynamicUrl && currentUrl == initialUrl) {
+                val type = when {
+                    currentUrl.contains(".m3u8", ignoreCase = true) -> "m3u8"
+                    currentUrl.contains(".mpd", ignoreCase = true) -> "mpd"
+                    currentUrl.contains(".ts", ignoreCase = true) -> "ts"
+                    currentUrl.contains(".flv", ignoreCase = true) -> "flv"
+                    currentUrl.contains(".mp4", ignoreCase = true) -> "mp4"
+                    currentUrl.contains(".mkv", ignoreCase = true) -> "mkv"
+                    else -> null
+                }
+                return@withContext StreamResolutionResult(currentUrl, type)
+            }
+
+            // 3. Dynamic Stream Resolver: Tự động follow redirects và phát hiện MIME type từ server
+            val response = runCatching {
+                httpRequestRaw(
+                    method = "GET",
+                    url = currentUrl,
+                    headers = headers,
+                    body = "",
+                    followRedirects = true,
+                    maxResponseBodyBytes = 2048
+                )
+            }.getOrNull()
+
+            val finalUrl = response?.url?.takeIf(String::isNotBlank) ?: currentUrl
+            val contentType = response?.headers?.entries?.firstOrNull { it.key.equals("content-type", ignoreCase = true) }?.value?.lowercase()
+
+            var detectedType: String? = null
+            if (contentType != null) {
+                detectedType = when {
+                    contentType.contains("application/vnd.apple.mpegurl") || contentType.contains("application/x-mpegurl") || contentType.contains("mpegurl") -> "m3u8"
+                    contentType.contains("video/mp2t") -> "ts"
+                    contentType.contains("application/dash+xml") -> "mpd"
+                    contentType.contains("video/x-flv") || contentType.contains("video/flv") || contentType.contains("flv") -> "flv"
+                    contentType.contains("video/mp4") -> "mp4"
+                    contentType.contains("video/x-matroska") -> "mkv"
+                    else -> null
+                }
+            }
+
+            if (detectedType == null) {
+                detectedType = when {
+                    finalUrl.contains(".m3u8", ignoreCase = true) -> "m3u8"
+                    finalUrl.contains(".mpd", ignoreCase = true) -> "mpd"
+                    finalUrl.contains(".ts", ignoreCase = true) -> "ts"
+                    finalUrl.contains(".flv", ignoreCase = true) -> "flv"
+                    finalUrl.contains(".mp4", ignoreCase = true) -> "mp4"
+                    finalUrl.contains(".mkv", ignoreCase = true) -> "mkv"
+                    else -> null
+                }
+            }
+
+            StreamResolutionResult(finalUrl, detectedType)
+        }.getOrDefault(StreamResolutionResult(initialUrl, null))
     }
 
     fun refresh() {
@@ -570,6 +700,10 @@ internal fun parseM3uPlaylist(
                     val detectedStreamType = when {
                         pending.manifestType?.equals("mpd", ignoreCase = true) == true || streamUrl.contains(".mpd", ignoreCase = true) -> "mpd"
                         pending.manifestType?.equals("hls", ignoreCase = true) == true || streamUrl.contains(".m3u8", ignoreCase = true) -> "m3u8"
+                        pending.manifestType?.equals("flv", ignoreCase = true) == true || streamUrl.contains(".flv", ignoreCase = true) -> "flv"
+                        pending.manifestType?.equals("ts", ignoreCase = true) == true || streamUrl.contains(".ts", ignoreCase = true) -> "ts"
+                        pending.manifestType?.equals("mp4", ignoreCase = true) == true || streamUrl.contains(".mp4", ignoreCase = true) -> "mp4"
+                        pending.manifestType?.equals("mkv", ignoreCase = true) == true || streamUrl.contains(".mkv", ignoreCase = true) -> "mkv"
                         else -> null
                     }
 

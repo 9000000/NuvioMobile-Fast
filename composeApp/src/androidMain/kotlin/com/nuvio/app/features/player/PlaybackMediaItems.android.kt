@@ -39,6 +39,11 @@ private fun inferMimeTypeFromStreamType(streamType: String?): String? {
         "hls", "m3u8" -> MimeTypes.APPLICATION_M3U8
         "dash", "mpd" -> MimeTypes.APPLICATION_MPD
         "smoothstreaming", "ss" -> MimeTypes.APPLICATION_SS
+        "flv" -> MimeTypes.VIDEO_FLV
+        "ts" -> MimeTypes.VIDEO_MP2T
+        "mp4" -> MimeTypes.VIDEO_MP4
+        "mkv" -> MimeTypes.VIDEO_MATROSKA
+        "webm" -> MimeTypes.VIDEO_WEBM
         else -> null
     }
 }
@@ -102,6 +107,10 @@ internal fun normalizeMimeType(contentType: String?): String? {
         "video/mkv",
         "audio/mkv" -> MimeTypes.VIDEO_MATROSKA
 
+        "video/x-flv",
+        "video/flv" -> MimeTypes.VIDEO_FLV
+
+        "video/mp2t" -> MimeTypes.VIDEO_MP2T
         else -> null
     }
 }
@@ -126,6 +135,7 @@ private fun inferMimeTypeFromPath(path: String?): String? {
         extension == "webm" -> MimeTypes.VIDEO_WEBM
         extension == "mp4" || extension == "m4v" -> MimeTypes.VIDEO_MP4
         extension == "ts" || extension == "mts" || extension == "m2ts" -> MimeTypes.VIDEO_MP2T
+        extension == "flv" -> MimeTypes.VIDEO_FLV
         extension == "mov" -> MIME_VIDEO_QUICK_TIME
         extension == "avi" -> MimeTypes.VIDEO_AVI
         extension == "mpeg" || extension == "mpg" -> MimeTypes.VIDEO_MPEG
@@ -160,6 +170,7 @@ private fun inferMimeTypeFromQuery(query: String): String? {
                 "webm" -> return MimeTypes.VIDEO_WEBM
                 "mp4", "m4v" -> return MimeTypes.VIDEO_MP4
                 "ts", "mts", "m2ts" -> return MimeTypes.VIDEO_MP2T
+                "flv" -> return MimeTypes.VIDEO_FLV
                 "mov" -> return MIME_VIDEO_QUICK_TIME
                 "avi" -> return MimeTypes.VIDEO_AVI
                 "mpeg", "mpg" -> return MimeTypes.VIDEO_MPEG
@@ -180,6 +191,9 @@ private fun inferMimeTypeFromQuery(query: String): String? {
             "application/vnd.ms-sstr+xml",
             "smoothstreaming",
             "ss" -> return MimeTypes.APPLICATION_SS
+            "video/x-flv",
+            "video/flv",
+            "flv" -> return MimeTypes.VIDEO_FLV
         }
     }
 
@@ -192,6 +206,7 @@ private fun inferMimeTypeFromDelimitedToken(value: String): String? =
         DELIMITED_HLS_PATTERN.containsMatchIn(value) -> MimeTypes.APPLICATION_M3U8
         DELIMITED_MPD_PATTERN.containsMatchIn(value) -> MimeTypes.APPLICATION_MPD
         DELIMITED_SS_PATTERN.containsMatchIn(value) -> MimeTypes.APPLICATION_SS
+        DELIMITED_FLV_PATTERN.containsMatchIn(value) -> MimeTypes.VIDEO_FLV
         else -> null
     }
 
@@ -230,3 +245,4 @@ private val DELIMITED_M3U8_PATTERN = Regex("(^|[=/_.?&%-])m3u8($|[=/_.?&%-])")
 private val DELIMITED_HLS_PATTERN = Regex("(^|[=/_.?&%-])hls($|[=/_.?&%-])")
 private val DELIMITED_MPD_PATTERN = Regex("(^|[=/_.?&%-])mpd($|[=/_.?&%-])")
 private val DELIMITED_SS_PATTERN = Regex("(^|[=/_.?&%-])(ism|isml)($|[=/_.?&%-])")
+private val DELIMITED_FLV_PATTERN = Regex("(^|[=/_.?&%-])flv($|[=/_.?&%-])")
