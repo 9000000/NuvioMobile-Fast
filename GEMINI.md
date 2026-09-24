@@ -27,10 +27,27 @@ Tệp này kiểm soát hành vi của AI Agent.
    - Tên biến, hàm, file: **TIẾNG ANH** (camelCase, snake_case...).
    - Comment trong code: **TIẾNG ANH** (để chuẩn hóa).
 
+## 🧠 Tự Động Nhận Diện Kỹ Năng Tự Nhiên (Natural Skill Auto-Routing)
+> **Nguyên tắc cốt lõi**: KHÔNG BAO GIỜ bắt người dùng phải gõ lệnh slash `/`. Khi người dùng chat bằng ngôn ngữ tự nhiên (Tiếng Việt hoặc Tiếng Anh), AI PHẢI chủ động nhận diện ý định (Intent Recognition) và tự động áp dụng kỹ năng chuyên sâu tương ứng:
+
+- 🎨 **Giao diện, Màu sắc, Animation, Responsive, Đẹp hơn, UI/UX**: Tự động áp dụng `ui-ux-pro-max-skill`, `frontend-trends-2026`, `tailwind-patterns`.
+- ⚡ **Tối giản, Làm nhanh, Lười, YAGNI, Không over-engineering, Code ngắn**: Tự động áp dụng `ponytail`, `clean-code`.
+- 🐛 **Báo lỗi, Crash, Bug, Fix, Không chạy được, Exception**: Tự động áp dụng `systematic-debugging`, `debugger`.
+- 🗄️ **Database, Supabase, Postgres, Prisma, Tạo bảng, Query SQL**: Tự động áp dụng `postgres-best-practices`, `prisma-expert`, `neon-postgres`.
+- 🔐 **Đăng nhập, Phân quyền, Auth, Tài khoản, Clerk**: Tự động áp dụng `clerk-auth`, `auth-implementation-patterns`.
+- 💳 **Thanh toán, Bán hàng, Stripe, Gói cước, Checkout**: Tự động áp dụng `stripe-integration`, `pricing-strategy`, `micro-saas-launcher`.
+- 🚀 **Deploy, Đưa web lên mạng, Hosting, Vercel, VPS**: Tự động áp dụng `vercel-deployment`, `server-management`.
+- 📱 **Mobile App, Ứng dụng điện thoại, Flutter, React Native**: Tự động áp dụng `flutter-expert`, `react-native-architecture`.
+- 🐳 **Docker, Container, Dockerfile, Docker Compose**: Tự động áp dụng `docker-expert`.
+- 🤖 **AI Prompt, Chatbot, RAG, Hỏi đáp tài liệu, LLM**: Tự động áp dụng `prompt-engineering`, `llm-app-patterns`, `rag-implementation`.
+- 🌐 **Cào dữ liệu, Duyệt web, Scrape, Tìm kiếm mạng**: Tự động áp dụng `firecrawl-scraper`, `browser-automation`, `tavily-web`.
+- 🧪 **Kiểm thử, Viết test, TDD, E2E**: Tự động áp dụng `tdd-master-workflow`, `e2e-testing-patterns`.
+- 📈 **Lên top Google, SEO, Tìm kiếm AI (ChatGPT, Perplexity)**: Tự động áp dụng `seo-expert-kit`, `geo-fundamentals`.
+
 ## Khả năng cốt lõi
 
-Agent có quyền truy cập **TOÀN BỘ** kỹ năng (Web, Mobile, DevOps, AI, Security).
-Vui lòng sử dụng các kỹ năng phù hợp nhất cho **Phát triển chung**.
+Agent có quyền truy cập **TOÀN BỘ** kỹ năng tinh hoa (Web, Mobile, DevOps, AI, Security).
+Vui lòng chủ động sử dụng các kỹ năng phù hợp nhất cho **Vibe Coding**.
 
 - Thao tác tệp (đọc, ghi, tìm kiếm)
 - Lệnh terminal
