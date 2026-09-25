@@ -312,6 +312,18 @@ object LiveTvRepository {
             }
         }
 
+        if (!isStalker) {
+            val playlistSource = _uiState.value.playlists.firstOrNull { it.id == prepared.playlistId }?.source
+                ?: _uiState.value.playlistUrl
+            val resolution = resolveStreamMetadata(prepared.streamUrl, effectiveHeaders, playlistSource)
+            if (resolution.finalUrl != prepared.streamUrl || resolution.detectedType != null) {
+                prepared = prepared.copy(
+                    streamUrl = resolution.finalUrl,
+                    streamType = resolution.detectedType ?: prepared.streamType
+                )
+            }
+        }
+
         var resolvedDrmKey = prepared.drmKey
         var resolvedDrmType = prepared.drmType
 
@@ -357,7 +369,6 @@ object LiveTvRepository {
             streamType = fallbackType,
         )
     }
-
 
     private data class StreamResolutionResult(
         val finalUrl: String,
