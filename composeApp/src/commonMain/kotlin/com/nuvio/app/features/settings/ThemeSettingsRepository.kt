@@ -66,7 +66,7 @@ object ThemeSettingsRepository {
         _customThemePreference.value = CustomThemeColors.Default
         _customThemeColors.value = CustomThemeColors.solid(CustomThemeColors.Default.second)
         _amoledEnabled.value = false
-        _lowEndModeEnabled.value = false
+        _lowEndModeEnabled.value = ThemeSettingsStorage.loadLowEndModeEnabled() ?: false
         _liquidGlassNativeTabBarEnabled.value = false
         NativeTabBridge.publishAccentColor(ThemeColors.White.nativeAccentHex)
         NativeTabBridge.publishLiquidGlassEnabled(false)
@@ -125,7 +125,6 @@ object ThemeSettingsRepository {
 
     fun setLowEndModeEnabled(enabled: Boolean) {
         ensureLoaded()
-        if (_lowEndModeEnabled.value == enabled) return
         _lowEndModeEnabled.value = enabled
         ThemeSettingsStorage.saveLowEndModeEnabled(enabled)
     }

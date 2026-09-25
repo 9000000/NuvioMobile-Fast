@@ -26,7 +26,6 @@ actual object ThemeSettingsStorage {
     private val profileScopedSyncKeys = listOf(
         selectedThemeKey,
         customThemeColorsKey,
-        lowEndModeEnabledKey,
         amoledEnabledKey,
         navBarGlowEnabledKey,
         liquidGlassNativeTabBarEnabledKey,
@@ -62,14 +61,22 @@ actual object ThemeSettingsStorage {
 
     actual fun loadLowEndModeEnabled(): Boolean? =
         preferences?.let { prefs ->
-            val key = ProfileScopedKey.of(lowEndModeEnabledKey)
-            if (prefs.contains(key)) prefs.getBoolean(key, false) else null
+            if (prefs.contains(lowEndModeEnabledKey)) {
+                prefs.getBoolean(lowEndModeEnabledKey, false)
+            } else {
+                val scopedKey = ProfileScopedKey.of(lowEndModeEnabledKey)
+                if (prefs.contains(scopedKey)) {
+                    val value = prefs.getBoolean(scopedKey, false)
+                    prefs.edit().putBoolean(lowEndModeEnabledKey, value).apply()
+                    value
+                } else null
+            }
         }
 
     actual fun saveLowEndModeEnabled(enabled: Boolean) {
         preferences
             ?.edit()
-            ?.putBoolean(ProfileScopedKey.of(lowEndModeEnabledKey), enabled)
+            ?.putBoolean(lowEndModeEnabledKey, enabled)
             ?.apply()
     }
 
@@ -151,7 +158,6 @@ actual object ThemeSettingsStorage {
         loadSelectedTheme()?.let { put(selectedThemeKey, encodeSyncString(it)) }
         loadCustomThemeColors()?.let { put(customThemeColorsKey, encodeSyncString(it)) }
         loadNavBarGlowEnabled()?.let { put(navBarGlowEnabledKey, encodeSyncBoolean(it)) }
-        loadLowEndModeEnabled()?.let { put(lowEndModeEnabledKey, encodeSyncBoolean(it)) }
         loadAmoledEnabled()?.let { put(amoledEnabledKey, encodeSyncBoolean(it)) }
         loadLiquidGlassNativeTabBarEnabled()?.let { put(liquidGlassNativeTabBarEnabledKey, encodeSyncBoolean(it)) }
         loadNavBarStyle()?.let { put(NAV_BAR_STYLE_KEY, encodeSyncString(it)) }
@@ -165,7 +171,6 @@ actual object ThemeSettingsStorage {
         payload.decodeSyncString(selectedThemeKey)?.let(::saveSelectedTheme)
         payload.decodeSyncString(customThemeColorsKey)?.let(::saveCustomThemeColors)
         payload.decodeSyncBoolean(navBarGlowEnabledKey)?.let(::saveNavBarGlowEnabled)
-        payload.decodeSyncBoolean(lowEndModeEnabledKey)?.let(::saveLowEndModeEnabled)
         payload.decodeSyncBoolean(amoledEnabledKey)?.let(::saveAmoledEnabled)
         payload.decodeSyncBoolean(liquidGlassNativeTabBarEnabledKey)?.let(::saveLiquidGlassNativeTabBarEnabled)
         payload.decodeSyncString(NAV_BAR_STYLE_KEY)?.let(::saveNavBarStyle)

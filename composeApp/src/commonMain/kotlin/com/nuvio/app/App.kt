@@ -70,6 +70,7 @@ fun App(
 
 @Composable
 internal fun AppEnvironment(content: @Composable () -> Unit) {
+    remember { ThemeSettingsRepository.ensureLoaded() }
     if (!platformProvidesImageLoader) {
         setSingletonImageLoaderFactory { context ->
             ImageLoader.Builder(context)

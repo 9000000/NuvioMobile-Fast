@@ -99,4 +99,17 @@ class ThemeSettingsStorageTest {
         assertEquals("WHITE", ThemeSettingsStorage.loadSelectedTheme())
         assertEquals("#111111,#222222,#333333", preferences.getString(otherProfileKey, null))
     }
+
+    @Test
+    fun lowEndModePersistsAcrossReloadAndSyncPayload() {
+        ThemeSettingsStorage.saveLowEndModeEnabled(true)
+        ThemeSettingsStorage.initialize(RuntimeEnvironment.getApplication())
+        assertEquals(true, ThemeSettingsStorage.loadLowEndModeEnabled())
+
+        // Remote sync payload from TV or another device without lowEndMode should NOT clear the device's lowEndMode setting
+        ThemeSettingsStorage.replaceFromSyncPayload(buildJsonObject {
+            put("selected_theme", encodeSyncString("WHITE"))
+        })
+        assertEquals(true, ThemeSettingsStorage.loadLowEndModeEnabled())
+    }
 }
