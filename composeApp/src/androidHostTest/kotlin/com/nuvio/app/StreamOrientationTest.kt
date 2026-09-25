@@ -37,6 +37,7 @@ class StreamOrientationTest {
 
     @BeforeTest
     fun initialize() {
+        com.nuvio.app.features.updater.AndroidAppUpdaterPlatform.initialize(RuntimeEnvironment.getApplication())
         PlayerSettingsStorage.initialize(RuntimeEnvironment.getApplication())
         PlayerSettingsRepository.clearLocalState()
         StreamsRepository.clear()

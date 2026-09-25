@@ -52,6 +52,27 @@ private enum class AppGateScreen {
     Main,
 }
 
+private fun resolveInitialGateScreen(ownsAppRuntime: Boolean): String {
+    if (!ownsAppRuntime) return AppGateScreen.Main.name
+    val profileState = ProfileRepository.state.value
+    val profiles = profileState.profiles
+    if (profiles.isNotEmpty()) {
+        val startupProfile = if (profileState.rememberLastProfileEnabled && profileState.hasEverSelectedProfile) {
+            profiles.find { it.profileIndex == ProfileRepository.activeProfileId }?.takeUnless { it.pinEnabled }
+        } else {
+            null
+        }
+        if (startupProfile != null) {
+            return AppGateScreen.Main.name
+        }
+        if (profiles.size == 1 && !profiles.first().pinEnabled) {
+            return AppGateScreen.Main.name
+        }
+        return AppGateScreen.ProfileSelection.name
+    }
+    return AppGateScreen.Loading.name
+}
+
 @Composable
 internal fun AppGate(
     initialTab: AppScreenTab,
@@ -96,6 +117,13 @@ internal fun AppGate(
             } ?: {},
         )
         return
+    }
+
+    remember {
+        if (ownsAppRuntime) {
+            AuthRepository.initialize()
+            ProfileRepository.loadCachedProfiles()
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -143,7 +171,10 @@ internal fun AppGate(
         )
     }
 
-    var gateScreen by rememberSaveable { mutableStateOf(AppGateScreen.Loading.name) }
+    val initialGateScreen = remember(ownsAppRuntime) {
+        resolveInitialGateScreen(ownsAppRuntime)
+    }
+    var gateScreen by rememberSaveable { mutableStateOf(initialGateScreen) }
     var editingProfile by remember { mutableStateOf<NuvioProfile?>(null) }
     var autoSkipProfileSelection by rememberSaveable { mutableStateOf(false) }
     var profileSelectionLoading by rememberSaveable { mutableStateOf(false) }

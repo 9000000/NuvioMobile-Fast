@@ -853,14 +853,6 @@ fun HomeScreen(
     val addonManifestsLoading = enabledAddons.any { it.isRefreshing }
     val addonManifestErrorMessage = enabledAddons.firstEnabledManifestError()
     val isResolvingHeroSources = addonManifestsLoading || homeUiState.isLoading
-    var firstCatalogReported by remember { mutableStateOf(false) }
-
-    LaunchedEffect(homeUiState.sections.firstOrNull()?.key, onFirstCatalogRendered) {
-        if (firstCatalogReported || homeUiState.sections.isEmpty()) return@LaunchedEffect
-        firstCatalogReported = true
-        onFirstCatalogRendered?.invoke()
-    }
-
     val visibleCollections = remember(collections) {
         collections.filter { it.folders.isNotEmpty() }
     }
@@ -904,6 +896,26 @@ fun HomeScreen(
         }
     }
     val hasRenderableHomeRows = homeUiState.sections.isNotEmpty() || hasRenderableCollectionRows
+
+    var firstCatalogReported by remember { mutableStateOf(false) }
+
+    LaunchedEffect(
+        hasRenderableHomeRows,
+        hasContinueWatchingRows,
+        onFirstCatalogRendered,
+    ) {
+        if (firstCatalogReported) return@LaunchedEffect
+        if (hasRenderableHomeRows || hasContinueWatchingRows) {
+            firstCatalogReported = true
+            onFirstCatalogRendered?.invoke()
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(200)
+        if (!firstCatalogReported) {
+            firstCatalogReported = true
+            onFirstCatalogRendered?.invoke()
+        }
+    }
     val showHeroSlot = shouldShowHomeHeroSlot(
         heroEnabled = homeSettingsUiState.heroEnabled,
         hasHeroItems = homeUiState.heroItems.isNotEmpty(),
