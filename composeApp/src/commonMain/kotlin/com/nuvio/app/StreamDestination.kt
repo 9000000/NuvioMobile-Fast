@@ -471,6 +471,7 @@ internal fun StreamDestination(
     )
     val useLandscapeLoading = autoPlayNavigationStarted || streamsUiState.shouldUseLandscapeAutoPlayLoading(
         expectedRequestToken = expectedStreamsRequestToken,
+        settings = playerSettings,
         manualSelection = launch.manualSelection,
     )
     SideEffect { onLandscapeLoadingChanged(useLandscapeLoading) }
@@ -624,7 +625,7 @@ internal fun StreamDestination(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
-            NuvioLoadingIndicator(color = MaterialTheme.nuvio.colors.accent)
+            NuvioLoadingIndicator()
         }
         return
     }

@@ -43,6 +43,7 @@ fun PlayerScreen(
     contentLanguage: String? = null,
     drmType: String? = null,
     drmKey: String? = null,
+    launchId: Long? = null,
 ) {
     PlayerScreenContent(
         PlayerScreenArgs(
@@ -84,6 +85,7 @@ fun PlayerScreen(
             contentLanguage = contentLanguage,
             drmType = drmType,
             drmKey = drmKey,
+            launchId = launchId,
         )
     )
 }

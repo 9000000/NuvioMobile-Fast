@@ -41,4 +41,5 @@ internal data class PlayerScreenArgs(
     val contentLanguage: String? = null,
     val drmType: String? = null,
     val drmKey: String? = null,
+    val launchId: Long? = null,
 )

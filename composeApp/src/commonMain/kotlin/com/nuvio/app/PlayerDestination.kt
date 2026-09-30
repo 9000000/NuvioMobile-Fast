@@ -74,6 +74,7 @@ internal fun PlayerDestination(
         contentLanguage = launch.contentLanguage,
         drmType = launch.drmType,
         drmKey = launch.drmKey,
+        launchId = route.launchId,
         onBack = onBack,
         onOpenInExternalPlayer = { request ->
             val playerLaunch = PlayerLaunch(

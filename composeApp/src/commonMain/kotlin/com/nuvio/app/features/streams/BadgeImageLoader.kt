@@ -21,13 +21,15 @@ internal object BadgeImageLoader {
 
     fun get(context: PlatformContext): ImageLoader {
         instance?.let { return it }
-        return synchronized(lock) {
-            instance ?: ImageLoader.Builder(context)
+        synchronized(lock) {
+            instance?.let { return it }
+            val loader = ImageLoader.Builder(context)
                 .memoryCachePolicy(CachePolicy.ENABLED)
                 .diskCachePolicy(CachePolicy.ENABLED)
                 .crossfade(false)
                 .build()
-                .also { instance = it }
+            instance = loader
+            return loader
         }
     }
 }
