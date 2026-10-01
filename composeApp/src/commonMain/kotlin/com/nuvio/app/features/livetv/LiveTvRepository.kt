@@ -8,8 +8,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -24,8 +28,27 @@ object LiveTvRepository {
     private val _navigationResetEvent = MutableStateFlow(0L)
     val navigationResetEvent: StateFlow<Long> = _navigationResetEvent.asStateFlow()
 
+    private val _scrollToChannelEvent = MutableSharedFlow<String>(
+        replay = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val scrollToChannelEvent: SharedFlow<String> = _scrollToChannelEvent.asSharedFlow()
+
     fun requestResetToNavigationDefault() {
         _navigationResetEvent.value += 1L
+    }
+
+    fun requestScrollToLastWatched() {
+        val channelId = _uiState.value.lastWatchedChannelId ?: return
+        _scrollToChannelEvent.tryEmit(channelId)
+    }
+
+    fun requestScrollToChannel(channelId: String) {
+        _scrollToChannelEvent.tryEmit(channelId)
+    }
+
+    fun clearScrollToChannelEvent() {
+        _scrollToChannelEvent.resetReplayCache()
     }
 
     private var hasLoaded = false

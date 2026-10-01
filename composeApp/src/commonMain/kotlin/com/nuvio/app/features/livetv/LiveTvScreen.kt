@@ -234,8 +234,65 @@ fun LiveTvScreen(
         onChannelClick(channel)
     }
 
+    var isInitialFilterPass by rememberSaveable { mutableStateOf(true) }
+    var suppressResetScroll by remember { mutableStateOf(false) }
+    var pendingScrollChannelId by remember { mutableStateOf<String?>(null) }
+    var highlightedChannelId by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(Unit) {
         launchingChannelId = null
+    }
+
+    LaunchedEffect(Unit) {
+        LiveTvRepository.scrollToChannelEvent.collect { targetChannelId ->
+            val allChannels = LiveTvRepository.uiState.value.channels
+            val targetChannel = allChannels.firstOrNull { it.id == targetChannelId } ?: return@collect
+
+            suppressResetScroll = true
+
+            // Đảm bảo kênh không bị lọc mất bởi ô tìm kiếm
+            if (searchQuery.isNotBlank() && !targetChannel.name.contains(searchQuery, ignoreCase = true)) {
+                searchQuery = ""
+            }
+
+            // Đảm bảo chọn đúng Playlist chứa kênh
+            if (targetChannel.playlistId != null && selectedPlaylistId != targetChannel.playlistId) {
+                selectedPlaylistId = targetChannel.playlistId
+            }
+
+            // Đảm bảo filterMode và category hiển thị kênh
+            val isFavorite = targetChannelId in uiState.favoriteChannelIds
+            if (filterMode == LiveTvChannelFilterMode.Favorites && !isFavorite) {
+                filterMode = LiveTvChannelFilterMode.All
+                selectedCategoryName = null
+            } else if (filterMode == LiveTvChannelFilterMode.Category && selectedCategoryName != null) {
+                val groupName = categoryNameForChannel(targetChannel, uncategorizedLabel)
+                if (!groupName.equals(selectedCategoryName, ignoreCase = true)) {
+                    selectedCategoryName = groupName
+                }
+            }
+
+            pendingScrollChannelId = targetChannelId
+        }
+    }
+
+    LaunchedEffect(pendingScrollChannelId, visibleChannels) {
+        val targetId = pendingScrollChannelId ?: return@LaunchedEffect
+        val channelIndex = visibleChannels.indexOfFirst { it.id == targetId }
+        if (channelIndex != -1) {
+            val headerCount = (if (lastWatchedChannel != null) 1 else 0) + 4
+            val targetIndex = headerCount + channelIndex
+            kotlinx.coroutines.delay(80)
+            listState.animateScrollToItem(targetIndex)
+            highlightedChannelId = targetId
+            pendingScrollChannelId = null
+            suppressResetScroll = false
+            LiveTvRepository.clearScrollToChannelEvent()
+            kotlinx.coroutines.delay(2500)
+            if (highlightedChannelId == targetId) {
+                highlightedChannelId = null
+            }
+        }
     }
 
     LaunchedEffect(scrollToTopRequests) {
@@ -245,7 +302,13 @@ fun LiveTvScreen(
     }
 
     LaunchedEffect(searchQuery, filterMode, selectedCategoryName, selectedPlaylistId) {
-        listState.scrollToItem(0)
+        if (isInitialFilterPass) {
+            isInitialFilterPass = false
+            return@LaunchedEffect
+        }
+        if (!suppressResetScroll) {
+            listState.scrollToItem(0)
+        }
     }
 
     LaunchedEffect(categoryOptions, filterMode, selectedCategoryName) {
@@ -407,6 +470,7 @@ fun LiveTvScreen(
                             favoriteChannelIds = uiState.favoriteChannelIds,
                             uncategorizedGroupName = uncategorizedLabel,
                             launchingChannelId = launchingChannelId,
+                            highlightedChannelId = highlightedChannelId,
                             onFavoriteClick = { channel -> LiveTvRepository.toggleFavoriteChannel(channel.id) },
                             onPlayClick = playChannel,
                         )
@@ -737,6 +801,7 @@ private fun LazyListScope.liveTvChannelList(
     favoriteChannelIds: Set<String>,
     uncategorizedGroupName: String,
     launchingChannelId: String? = null,
+    highlightedChannelId: String? = null,
     onFavoriteClick: (LiveTvChannel) -> Unit,
     onPlayClick: (LiveTvChannel) -> Unit,
 ) {
@@ -749,6 +814,7 @@ private fun LazyListScope.liveTvChannelList(
             categoryName = categoryNameForChannel(channel, uncategorizedGroupName),
             isFavorite = channel.id in favoriteChannelIds,
             isLaunching = launchingChannelId == channel.id,
+            isHighlighted = highlightedChannelId == channel.id,
             onFavoriteClick = { onFavoriteClick(channel) },
             onPlayClick = { onPlayClick(channel) },
         )
@@ -761,16 +827,23 @@ private fun LiveTvChannelCard(
     categoryName: String,
     isFavorite: Boolean,
     isLaunching: Boolean = false,
+    isHighlighted: Boolean = false,
     onFavoriteClick: () -> Unit,
     onPlayClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val tokens = MaterialTheme.nuvio
+    val borderStroke = if (isHighlighted) {
+        BorderStroke(2.dp, tokens.colors.accent)
+    } else {
+        null
+    }
     Surface(
         modifier = modifier.fillMaxWidth(),
         onClick = onPlayClick,
-        color = tokens.colors.surface,
+        color = if (isHighlighted) tokens.colors.overlaySelected else tokens.colors.surface,
         shape = tokens.shapes.compactCard,
+        border = borderStroke,
     ) {
         Row(
             modifier = Modifier.padding(12.dp),

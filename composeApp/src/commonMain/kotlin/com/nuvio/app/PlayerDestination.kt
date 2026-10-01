@@ -3,10 +3,12 @@ package com.nuvio.app
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.nuvio.app.core.ui.NuvioToastController
+import com.nuvio.app.features.livetv.LiveTvRepository
 import com.nuvio.app.features.player.ExternalPlayerIntentResult
 import com.nuvio.app.features.player.ExternalPlayerPlatform
 import com.nuvio.app.features.player.PlayerLaunch
@@ -38,6 +40,13 @@ internal fun PlayerDestination(
     }
     LaunchedEffect(launch.videoId) {
         launch.videoId?.let { ResumePromptRepository.markPlayerEntered(it) }
+    }
+    DisposableEffect(route.launchId) {
+        onDispose {
+            if (launch.contentType == "live" || launch.providerAddonId == "live-tv") {
+                LiveTvRepository.requestScrollToLastWatched()
+            }
+        }
     }
     PlayerScreen(
         profileId = launch.profileId,
