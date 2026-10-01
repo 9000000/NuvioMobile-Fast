@@ -525,7 +525,7 @@ internal fun MainAppContent(
         if (!ownsAppRuntime) return@LaunchedEffect
         NetworkStatusRepository.ensureStarted()
         EpisodeReleaseNotificationsRepository.refreshAsync()
-        kotlinx.coroutines.delay(400)
+        kotlinx.coroutines.delay(2_000)
         initialHomeReady = true
     }
 
