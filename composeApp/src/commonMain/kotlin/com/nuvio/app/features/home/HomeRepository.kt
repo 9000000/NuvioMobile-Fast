@@ -32,7 +32,12 @@ import kotlin.random.Random
 
 object HomeRepository {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val _uiState = MutableStateFlow(HomeUiState())
+    private var cachedHeroSnapshot: List<MetaPreview> = HomeHeroCache.load()
+    private val _uiState = MutableStateFlow(
+        HomeUiState(
+            heroItems = if (HomeCatalogSettingsRepository.snapshot().heroEnabled) cachedHeroSnapshot else emptyList(),
+        ),
+    )
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     private var activeJob: Job? = null
@@ -80,15 +85,28 @@ object HomeRepository {
         activeJob?.cancel()
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
         activeJob = scope.launch {
+            val snapshot = HomeCatalogSettingsRepository.snapshot()
             val prioritizedRequests = prioritizeDefinitions(
                 definitions = requests,
-                snapshot = HomeCatalogSettingsRepository.snapshot(),
+                snapshot = snapshot,
             )
             val loadedSections = linkedMapOf<String, HomeCatalogSection>().apply {
                 putAll(cachedSections)
             }
             var firstErrorMessage: String? = null
             var batchIndex = 0
+
+            val hasCatalogHeroSources = snapshot.heroEnabled && prioritizedRequests.any { definition ->
+                snapshot.preferences[definition.key]?.heroSourceEnabled != false
+            }
+            if (snapshot.heroEnabled && !hasCatalogHeroSources) {
+                ensureCollectionHeroFallback(
+                    addons = activeAddons,
+                    forceRefresh = force,
+                    refreshSources = true,
+                    requestKey = requestKey,
+                )
+            }
 
             prioritizedRequests.chunked(HOME_CATALOG_FETCH_BATCH_SIZE).forEach { batch ->
                 if (activeRequestKey != requestKey) return@launch
@@ -114,12 +132,21 @@ object HomeRepository {
                 }
                 cachedSections = loadedSections.toMap()
                 lastErrorMessage = firstErrorMessage
-                if (batchIndex == 0 || (batchIndex + 1) % HOME_CATALOG_PUBLISH_INTERVAL == 0) {
-                    publishCurrentState(
-                        isLoading = true,
+
+                publishCurrentState(
+                    isLoading = true,
+                    requestKey = requestKey,
+                )
+
+                if (batchIndex == 0 && snapshot.heroEnabled && lastPublishedCatalogHeroEmpty && collectionHeroJob == null) {
+                    ensureCollectionHeroFallback(
+                        addons = activeAddons,
+                        forceRefresh = force,
+                        refreshSources = true,
                         requestKey = requestKey,
                     )
                 }
+
                 batchIndex++
             }
 
@@ -167,7 +194,10 @@ object HomeRepository {
         collectionHeroRequestKey = null
         lastPublishedCatalogHeroEmpty = true
         lastErrorMessage = null
-        _uiState.value = HomeUiState()
+        cachedHeroSnapshot = HomeHeroCache.load()
+        _uiState.value = HomeUiState(
+            heroItems = if (HomeCatalogSettingsRepository.snapshot().heroEnabled) cachedHeroSnapshot else emptyList(),
+        )
     }
 
     private fun publishCurrentState(
@@ -216,9 +246,16 @@ object HomeRepository {
         }
         lastPublishedCatalogHeroEmpty = snapshot.heroEnabled && catalogHeroItems.isEmpty()
         val heroItems = if (snapshot.heroEnabled) {
-            catalogHeroItems.ifEmpty { cachedCollectionHeroItems }
+            catalogHeroItems
+                .ifEmpty { cachedCollectionHeroItems }
+                .ifEmpty { cachedHeroSnapshot }
         } else {
             emptyList()
+        }
+
+        if (snapshot.heroEnabled && heroItems.isNotEmpty() && heroItems != cachedHeroSnapshot) {
+            cachedHeroSnapshot = heroItems
+            HomeHeroCache.save(heroItems)
         }
 
         _uiState.value = HomeUiState(
@@ -462,5 +499,13 @@ private fun prioritizeDefinitions(
             preference.enabled || (snapshot.heroEnabled && preference.heroSourceEnabled)
         }
     }
-    return priority + remainder
+    val sortedPriority = if (snapshot.heroEnabled) {
+        val (heroSources, nonHeroSources) = priority.partition { definition ->
+            snapshot.preferences[definition.key]?.heroSourceEnabled != false
+        }
+        heroSources + nonHeroSources
+    } else {
+        priority
+    }
+    return sortedPriority + remainder
 }

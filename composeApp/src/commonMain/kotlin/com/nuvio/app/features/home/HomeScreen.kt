@@ -909,13 +909,16 @@ fun HomeScreen(
 
     var firstCatalogReported by remember { mutableStateOf(false) }
 
+    val hasHeroItems = homeUiState.heroItems.isNotEmpty()
+
     LaunchedEffect(
         hasRenderableHomeRows,
         hasContinueWatchingRows,
+        hasHeroItems,
         onFirstCatalogRendered,
     ) {
         if (firstCatalogReported) return@LaunchedEffect
-        if (hasRenderableHomeRows || hasContinueWatchingRows) {
+        if (hasRenderableHomeRows || hasContinueWatchingRows || hasHeroItems) {
             firstCatalogReported = true
             onFirstCatalogRendered?.invoke()
             return@LaunchedEffect

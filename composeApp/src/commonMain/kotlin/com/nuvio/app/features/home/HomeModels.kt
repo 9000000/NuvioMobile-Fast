@@ -2,7 +2,9 @@ package com.nuvio.app.features.home
 
 import com.nuvio.app.features.addons.ManagedAddon
 import com.nuvio.app.features.catalog.CatalogTarget
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class MetaPreview(
     val id: String,
     val type: String,
@@ -25,6 +27,7 @@ data class MetaPreview(
 
 fun MetaPreview.stableKey(): String = "$type:$id"
 
+@Serializable
 enum class PosterShape {
     Poster,
     Square,
