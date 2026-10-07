@@ -75,6 +75,7 @@ import com.nuvio.app.features.home.HomeCatalogSettingsRepository
 import com.nuvio.app.features.home.buildAddonCatalogRefreshSignature
 import com.nuvio.app.features.mdblist.MdbListSettings
 import com.nuvio.app.features.mdblist.MdbListSettingsRepository
+import com.nuvio.app.features.mdblist.MdbListTracker
 import com.nuvio.app.features.notifications.EpisodeReleaseNotificationsRepository
 import com.nuvio.app.features.notifications.EpisodeReleaseNotificationsUiState
 import com.nuvio.app.features.player.PlayerSettingsRepository
@@ -202,6 +203,10 @@ fun SettingsScreen(
         val traktCommentsEnabled by remember {
             TraktCommentsSettings.ensureLoaded()
             TraktCommentsSettings.enabled
+        }.collectAsStateWithLifecycle()
+        val mdbListConnected by remember {
+            MdbListTracker.ensureLoaded()
+            MdbListTracker.isAuthenticated
         }.collectAsStateWithLifecycle()
         val trackingSettingsUiState by remember {
             TrackingSettingsRepository.ensureLoaded()
@@ -431,6 +436,7 @@ fun SettingsScreen(
                         traktAuthUiState = traktAuthUiState,
                         simklAuthUiState = simklAuthUiState,
                         traktCommentsEnabled = traktCommentsEnabled,
+                        mdbListConnected = mdbListConnected,
                         trackingSettingsUiState = trackingSettingsUiState,
                         homescreenHeroEnabled = homescreenSettingsUiState.heroEnabled,
                         homescreenShowCatalogType = homescreenSettingsUiState.showCatalogType,
@@ -499,6 +505,7 @@ fun SettingsScreen(
                         traktAuthUiState = traktAuthUiState,
                         simklAuthUiState = simklAuthUiState,
                         traktCommentsEnabled = traktCommentsEnabled,
+                        mdbListConnected = mdbListConnected,
                         trackingSettingsUiState = trackingSettingsUiState,
                         homescreenHeroEnabled = homescreenSettingsUiState.heroEnabled,
                         homescreenShowCatalogType = homescreenSettingsUiState.showCatalogType,
@@ -579,6 +586,7 @@ private fun MobileSettingsScreen(
     traktAuthUiState: TraktAuthUiState,
     simklAuthUiState: SimklAuthUiState,
     traktCommentsEnabled: Boolean,
+    mdbListConnected: Boolean,
     trackingSettingsUiState: TrackingSettingsUiState,
     homescreenHeroEnabled: Boolean,
     homescreenShowCatalogType: Boolean,
@@ -873,6 +881,7 @@ private fun MobileSettingsScreen(
                     simklUiState = simklAuthUiState,
                     settingsUiState = trackingSettingsUiState,
                     commentsEnabled = traktCommentsEnabled,
+                    mdbListConnected = mdbListConnected,
                     onCommentsEnabledChange = TraktCommentsSettings::setEnabled,
                 )
                 SettingsPage.TorrServer -> torrServerSettingsContent(
@@ -1002,6 +1011,7 @@ private fun TabletSettingsScreen(
     traktAuthUiState: TraktAuthUiState,
     simklAuthUiState: SimklAuthUiState,
     traktCommentsEnabled: Boolean,
+    mdbListConnected: Boolean,
     trackingSettingsUiState: TrackingSettingsUiState,
     homescreenHeroEnabled: Boolean,
     homescreenShowCatalogType: Boolean,
@@ -1352,6 +1362,7 @@ private fun TabletSettingsScreen(
                         simklUiState = simklAuthUiState,
                         settingsUiState = trackingSettingsUiState,
                         commentsEnabled = traktCommentsEnabled,
+                        mdbListConnected = mdbListConnected,
                         onCommentsEnabledChange = TraktCommentsSettings::setEnabled,
                     )
                     SettingsPage.TorrServer -> torrServerSettingsContent(
