@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,7 +20,9 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.NetworkCheck
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -123,6 +126,16 @@ internal fun LazyListScope.torrServerSettingsContent(
                         onClick = onShowUrlDialog,
                     )
                     SettingsGroupDivider(isTablet = isTablet)
+                    TorrServerActionRow(
+                        title = stringResource(Res.string.torrserver_test_connection),
+                        statusMessage = uiState.serverStatusMessage,
+                        isSuccess = uiState.serverStatusSuccess,
+                        isLoading = uiState.isTestingServer,
+                        icon = Icons.Rounded.NetworkCheck,
+                        onClick = onTestConnection,
+                        isTablet = isTablet,
+                    )
+                    SettingsGroupDivider(isTablet = isTablet)
                     val authSubtitle = if (uiState.authUsername.isNotBlank()) {
                         "Username: ${uiState.authUsername}"
                     } else {
@@ -172,27 +185,19 @@ internal fun LazyListScope.torrServerSettingsContent(
             }
         }
 
-        item {
-            SettingsSection(
-                title = "DIAGNOSTICS",
-                isTablet = isTablet,
-            ) {
-                SettingsGroup(isTablet = isTablet) {
-                    TorrServerActionRow(
-                        title = stringResource(Res.string.torrserver_test_connection),
-                        statusMessage = uiState.serverStatusMessage,
-                        isSuccess = uiState.serverStatusSuccess,
-                        isLoading = uiState.isTestingServer,
-                        onClick = onTestConnection,
-                        isTablet = isTablet,
-                    )
-                    if (uiState.gst) {
-                        SettingsGroupDivider(isTablet = isTablet)
+        if (uiState.gst) {
+            item {
+                SettingsSection(
+                    title = "DIAGNOSTICS",
+                    isTablet = isTablet,
+                ) {
+                    SettingsGroup(isTablet = isTablet) {
                         TorrServerActionRow(
                             title = stringResource(Res.string.torrserver_check_gst),
                             statusMessage = uiState.gstStatusMessage,
                             isSuccess = uiState.gstStatusSuccess,
                             isLoading = uiState.isCheckingGst,
+                            icon = Icons.Rounded.CheckCircle,
                             onClick = onCheckGst,
                             isTablet = isTablet,
                         )
@@ -211,36 +216,70 @@ private fun TorrServerActionRow(
     isLoading: Boolean,
     onClick: () -> Unit,
     isTablet: Boolean,
+    icon: ImageVector? = null,
 ) {
     val tokens = MaterialTheme.nuvio
+    val iconSize = if (isTablet) 42.dp else 36.dp
+    val verticalPadding = if (isTablet) 16.dp else 14.dp
+    val horizontalPadding = if (isTablet) 20.dp else 16.dp
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = !isLoading, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f, fill = false)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
-            )
-            if (!statusMessage.isNullOrBlank()) {
-                val statusColor = when (isSuccess) {
-                    true -> Color(0xFF4CAF50)
-                    false -> Color(0xFFEF5350)
-                    else -> tokens.colors.textMuted
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (icon != null) {
+                Surface(
+                    modifier = Modifier.size(iconSize),
+                    color = tokens.colors.accent.copy(alpha = tokens.opacity.pressed),
+                    shape = tokens.shapes.compactCard,
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = tokens.colors.accent,
+                            modifier = Modifier.size(if (isTablet) 28.dp else 24.dp),
+                        )
+                    }
                 }
+                Spacer(modifier = Modifier.width(if (isTablet) 16.dp else 14.dp))
+            }
+
+            Column(modifier = Modifier.weight(1f, fill = false)) {
                 Text(
-                    text = statusMessage,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = statusColor,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 2.dp),
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = tokens.colors.textPrimary,
+                    fontWeight = FontWeight.Medium,
                 )
+                if (!statusMessage.isNullOrBlank()) {
+                    val statusColor = when (isSuccess) {
+                        true -> Color(0xFF4CAF50)
+                        false -> Color(0xFFEF5350)
+                        else -> tokens.colors.textMuted
+                    }
+                    Text(
+                        text = statusMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = statusColor,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
             }
         }
 

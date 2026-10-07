@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
@@ -73,6 +74,8 @@ import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.core.ui.dismissNuvioBottomSheet
 import com.nuvio.app.features.downloads.DownloadsRepository
 import com.nuvio.app.features.details.MetaScreenSettingsRepository
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -89,6 +92,7 @@ import com.nuvio.app.features.watchprogress.WatchProgressEntry
 import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.features.watched.watchedItemKeys
 import com.nuvio.app.navigation.LocalUseNativeNavigation
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import nuvio.composeapp.generated.resources.*
@@ -167,6 +171,52 @@ fun StreamsScreen(
     var torrentPickerError by remember(videoId) { mutableStateOf<String?>(null) }
     val downloadScope = rememberCoroutineScope()
     var preferredFilterApplied by remember(videoId) { mutableStateOf(false) }
+    val episodeProgress = watchProgressUiState.progressForVideo(
+        videoId = videoId,
+        parentMetaId = parentMetaId,
+        seasonNumber = seasonNumber,
+        episodeNumber = episodeNumber,
+    )
+    val storedProgress = if (startFromBeginning) {
+        null
+    } else {
+        episodeProgress
+    }
+    val resumeState = resolveStreamResumeState(
+        progress = episodeProgress,
+        initialPositionMs = resumePositionMs,
+        initialProgressFraction = resumeProgressFraction,
+        startFromBeginning = startFromBeginning,
+    )
+    val effectiveResumePositionMs = resumeState.positionMs
+    val effectiveResumeProgressFraction = resumeState.progressFraction
+
+    var lastSelectedStream by remember(videoId) { mutableStateOf<StreamItem?>(null) }
+    var autoScrollTriggerKey by remember(videoId) {
+        mutableStateOf(if (storedProgress?.lastSourceUrl != null || storedProgress?.lastStreamTitle != null) 1 else 0)
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (lastSelectedStream != null || storedProgress?.lastSourceUrl != null || storedProgress?.lastStreamTitle != null) {
+            autoScrollTriggerKey++
+        }
+    }
+
+    val currentTargetStream = remember(uiState.filteredGroups, lastSelectedStream, storedProgress) {
+        val allVisible = uiState.filteredGroups.flatMap { it.streams }
+        allVisible.firstOrNull { it.matchesPlayback(lastSelectedStream, null) }
+            ?: allVisible.firstOrNull { it.matchesPlayback(null, storedProgress) }
+    }
+
+    LaunchedEffect(uiState.groups, lastSelectedStream, storedProgress) {
+        val targetInAll = uiState.groups.flatMap { it.streams }.firstOrNull {
+            it.matchesPlayback(lastSelectedStream, null) || it.matchesPlayback(null, storedProgress)
+        } ?: return@LaunchedEffect
+
+        if (uiState.selectedFilter != null && uiState.selectedFilter != targetInAll.addonId) {
+            StreamsRepository.selectFilter(targetInAll.addonId)
+        }
+    }
 
     LaunchedEffect(torrentPickerStream) {
         val stream = torrentPickerStream ?: return@LaunchedEffect
@@ -193,25 +243,6 @@ fun StreamsScreen(
             isTorrentPickerLoading = false
         }
     }
-    val episodeProgress = watchProgressUiState.progressForVideo(
-        videoId = videoId,
-        parentMetaId = parentMetaId,
-        seasonNumber = seasonNumber,
-        episodeNumber = episodeNumber,
-    )
-    val storedProgress = if (startFromBeginning) {
-        null
-    } else {
-        episodeProgress
-    }
-    val resumeState = resolveStreamResumeState(
-        progress = episodeProgress,
-        initialPositionMs = resumePositionMs,
-        initialProgressFraction = resumeProgressFraction,
-        startFromBeginning = startFromBeginning,
-    )
-    val effectiveResumePositionMs = resumeState.positionMs
-    val effectiveResumeProgressFraction = resumeState.progressFraction
 
     LaunchedEffect(type, videoId, seasonNumber, episodeNumber, manualSelection) {
         StreamsRepository.load(
@@ -269,6 +300,8 @@ fun StreamsScreen(
         val isTabletLayout = maxWidth >= 768.dp
 
         val handleStreamSelected: (StreamItem, Long?, Float?) -> Unit = { stream, positionMs, progressFraction ->
+            lastSelectedStream = stream
+            autoScrollTriggerKey++
             val isTorrServer = stream.addonName == "TorrServer" ||
                 (TorrServerConfigRepository.uiState.value.enabled && stream.p2pInfoHash != null)
             if (isTorrServer) {
@@ -294,6 +327,8 @@ fun StreamsScreen(
                 appendInstantServiceToDefaultName = debridSettings.canResolvePlayableLinks && !debridSettings.hasCustomStreamFormatting,
                 resumePositionMs = effectiveResumePositionMs,
                 resumeProgressFraction = effectiveResumeProgressFraction,
+                currentTargetStream = currentTargetStream,
+                autoScrollTriggerKey = autoScrollTriggerKey,
                 onStreamSelected = handleStreamSelected,
                 onStreamLongPress = { stream -> streamActionsTarget = stream },
                 onRefresh = reloadStreams,
@@ -314,6 +349,8 @@ fun StreamsScreen(
                 appendInstantServiceToDefaultName = debridSettings.canResolvePlayableLinks && !debridSettings.hasCustomStreamFormatting,
                 resumePositionMs = effectiveResumePositionMs,
                 resumeProgressFraction = effectiveResumeProgressFraction,
+                currentTargetStream = currentTargetStream,
+                autoScrollTriggerKey = autoScrollTriggerKey,
                 onStreamSelected = handleStreamSelected,
                 onStreamLongPress = { stream -> streamActionsTarget = stream },
                 onRefresh = reloadStreams,
@@ -441,6 +478,8 @@ fun StreamsScreen(
                 }
             },
             onOpen = { stream, openExternally ->
+                lastSelectedStream = stream
+                autoScrollTriggerKey++
                 onStreamActionOpen(
                     stream,
                     openExternally,
@@ -468,6 +507,8 @@ fun StreamsScreen(
                 val stream = torrentPickerStream ?: return@TorrentFilePickerDialog
                 torrentPickerStream = null
                 val customizedStream = stream.copy(fileIdx = fileId)
+                lastSelectedStream = customizedStream
+                autoScrollTriggerKey++
                 onStreamSelected(customizedStream, effectiveResumePositionMs, effectiveResumeProgressFraction)
             },
         )
@@ -490,6 +531,8 @@ private fun MobileStreamsLayout(
     appendInstantServiceToDefaultName: Boolean,
     resumePositionMs: Long?,
     resumeProgressFraction: Float?,
+    currentTargetStream: StreamItem? = null,
+    autoScrollTriggerKey: Int = 0,
     onStreamSelected: (stream: StreamItem, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit,
     onStreamLongPress: (StreamItem) -> Unit,
     onRefresh: () -> Unit,
@@ -577,6 +620,8 @@ private fun MobileStreamsLayout(
                         onStreamLongPress = onStreamLongPress,
                         resumePositionMs = resumePositionMs,
                         resumeProgressFraction = resumeProgressFraction,
+                        currentTargetStream = currentTargetStream,
+                        autoScrollTriggerKey = autoScrollTriggerKey,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -803,6 +848,8 @@ internal fun StreamList(
     resumePositionMs: Long?,
     resumeProgressFraction: Float?,
     modifier: Modifier = Modifier,
+    currentTargetStream: StreamItem? = null,
+    autoScrollTriggerKey: Int = 0,
 ) {
     val filteredGroups = uiState.filteredGroups
     val hasGroups = filteredGroups.isNotEmpty()
@@ -812,14 +859,41 @@ internal fun StreamList(
     val fetchingText = stringResource(Res.string.streams_fetching)
     val findingStreamsText = stringResource(Res.string.streams_finding_streams)
     val checkingMoreAddonsText = stringResource(Res.string.streams_checking_more_addons)
+    val currentStreamLabel = stringResource(Res.string.compose_player_playing)
     val formatStreamSize = rememberStreamSizeLabelFormat()
     val streamBadgeSettings by remember {
         StreamBadgeSettingsRepository.ensureLoaded()
         StreamBadgeSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
 
+    val listState = rememberLazyListState()
+
+    val targetStreamIndex = remember(filteredGroups, currentTargetStream, uiState.selectedFilter) {
+        if (currentTargetStream == null) null
+        else findStreamItemIndexInLazyColumn(
+            filteredGroups = filteredGroups,
+            showHeader = uiState.selectedFilter == null,
+            isTarget = { stream ->
+                stream === currentTargetStream || stream.matchesPlayback(currentTargetStream, null)
+            },
+        )
+    }
+
+    var lastScrolledTriggerKey by remember { mutableStateOf(-1) }
+
+    LaunchedEffect(targetStreamIndex, autoScrollTriggerKey) {
+        val index = targetStreamIndex ?: return@LaunchedEffect
+        if (autoScrollTriggerKey == 0) return@LaunchedEffect
+        if (lastScrolledTriggerKey == autoScrollTriggerKey) return@LaunchedEffect
+        lastScrolledTriggerKey = autoScrollTriggerKey
+        delay(120)
+        val targetScrollPosition = (index - 1).coerceAtLeast(0)
+        listState.animateScrollToItem(targetScrollPosition)
+    }
+
     CompositionLocalProvider(LocalStreamSizeLabelFormat provides formatStreamSize) {
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(
             horizontal = 12.dp,
@@ -853,6 +927,8 @@ internal fun StreamList(
                         badgePlacement = streamBadgeSettings.badgePlacement,
                         torrentNotSupportedText = torrentNotSupportedText,
                         fetchingText = fetchingText,
+                        currentTargetStream = currentTargetStream,
+                        currentStreamLabel = currentStreamLabel,
                         onStreamSelected = onStreamSelected,
                         onStreamLongPress = onStreamLongPress,
                         resumePositionMs = resumePositionMs,
@@ -884,6 +960,8 @@ private fun LazyListScope.streamSection(
     badgePlacement: StreamBadgePlacement,
     torrentNotSupportedText: String,
     fetchingText: String,
+    currentTargetStream: StreamItem?,
+    currentStreamLabel: String,
     onStreamSelected: (stream: StreamItem, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit,
     onStreamLongPress: (StreamItem) -> Unit,
     resumePositionMs: Long?,
@@ -933,6 +1011,9 @@ private fun LazyListScope.streamSection(
                     !AppFeaturePolicy.p2pEnabled &&
                     !isTorrServerEnabled &&
                     !(debridEnabled && stream.isAddonDebridCandidate)
+            val isCurrentStream = currentTargetStream != null && (
+                stream === currentTargetStream || stream.matchesPlayback(currentTargetStream, null)
+            )
             StreamCard(
                 stream = stream,
                 enabled = isSelectable || isUnsupportedTorrentStream,
@@ -940,6 +1021,8 @@ private fun LazyListScope.streamSection(
                 showFileSizeBadges = showFileSizeBadges,
                 showAddonLogo = showAddonLogo,
                 badgePlacement = badgePlacement,
+                isCurrent = isCurrentStream,
+                currentLabel = if (isCurrentStream) currentStreamLabel else null,
                 onClick = {
                     if (isSelectable) {
                         onStreamSelected(stream, resumePositionMs, resumeProgressFraction)
@@ -980,6 +1063,86 @@ internal fun streamCardRenderKey(
         append(':')
         append(it)
     }
+}
+
+internal fun findStreamItemIndexInLazyColumn(
+    filteredGroups: List<AddonStreamGroup>,
+    showHeader: Boolean,
+    isTarget: (StreamItem) -> Boolean,
+): Int? {
+    var currentIndex = 0
+    for (group in filteredGroups) {
+        if (group.streams.isEmpty() && !group.isLoading) continue
+
+        if (showHeader) {
+            currentIndex++ // StreamSectionHeader
+        }
+
+        val streamsBySource = group.streams.groupBy { stream ->
+            stream.sourceName?.takeIf { it.isNotBlank() } ?: stream.addonName
+        }
+        val sortedSources = streamsBySource.keys.sortedBy { it.lowercase() }
+        val showSourceHeaders = sortedSources.size > 1
+
+        for (sourceName in sortedSources) {
+            val sourceStreams = streamsBySource[sourceName].orEmpty()
+            if (showSourceHeaders) {
+                currentIndex++ // StreamSourceHeader
+            }
+            for (stream in sourceStreams) {
+                if (isTarget(stream)) {
+                    return currentIndex
+                }
+                currentIndex++
+            }
+        }
+    }
+    return null
+}
+
+internal fun StreamItem.matchesPlayback(
+    selectedStream: StreamItem?,
+    progress: WatchProgressEntry?,
+): Boolean {
+    if (selectedStream != null) {
+        if (this === selectedStream) return true
+        if (!playableDirectUrl.isNullOrBlank() && playableDirectUrl == selectedStream.playableDirectUrl) return true
+        if (!directPlaybackUrl.isNullOrBlank() && directPlaybackUrl == selectedStream.directPlaybackUrl) return true
+        val infoHash = p2pInfoHash
+        if (!infoHash.isNullOrBlank() && infoHash.equals(selectedStream.p2pInfoHash, ignoreCase = true)) {
+            val thisFileIdx = fileIdx ?: clientResolve?.fileIdx
+            val targetFileIdx = selectedStream.fileIdx ?: selectedStream.clientResolve?.fileIdx
+            if (thisFileIdx != null && targetFileIdx != null) {
+                return thisFileIdx == targetFileIdx
+            }
+            return true
+        }
+        if (!url.isNullOrBlank() && url == selectedStream.url) return true
+        if (!externalUrl.isNullOrBlank() && externalUrl == selectedStream.externalUrl) return true
+        if (addonId == selectedStream.addonId &&
+            streamLabel.equals(selectedStream.streamLabel, ignoreCase = true) &&
+            streamSubtitle == selectedStream.streamSubtitle
+        ) {
+            return true
+        }
+    }
+
+    if (progress != null) {
+        val lastUrl = progress.lastSourceUrl?.trim()
+        if (!lastUrl.isNullOrBlank()) {
+            if (playableDirectUrl == lastUrl || directPlaybackUrl == lastUrl || url == lastUrl) return true
+            val infoHash = p2pInfoHash
+            if (!infoHash.isNullOrBlank() && lastUrl.contains(infoHash, ignoreCase = true)) return true
+        }
+        val addonMatch = progress.providerAddonId.isNullOrBlank() || addonId == progress.providerAddonId
+        if (addonMatch) {
+            val progressTitle = progress.lastStreamTitle
+            if (!progressTitle.isNullOrBlank() && streamLabel.equals(progressTitle, ignoreCase = true)) {
+                return true
+            }
+        }
+    }
+    return false
 }
 
 // ---------------------------------------------------------------------------

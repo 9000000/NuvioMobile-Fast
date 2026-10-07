@@ -67,6 +67,8 @@ internal fun TabletStreamsLayout(
     appendInstantServiceToDefaultName: Boolean,
     resumePositionMs: Long?,
     resumeProgressFraction: Float?,
+    currentTargetStream: StreamItem? = null,
+    autoScrollTriggerKey: Int = 0,
     onStreamSelected: (stream: StreamItem, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit,
     onStreamLongPress: (StreamItem) -> Unit,
     onRefresh: () -> Unit,
@@ -215,6 +217,8 @@ internal fun TabletStreamsLayout(
                             onStreamLongPress = onStreamLongPress,
                             resumePositionMs = resumePositionMs,
                             resumeProgressFraction = resumeProgressFraction,
+                            currentTargetStream = currentTargetStream,
+                            autoScrollTriggerKey = autoScrollTriggerKey,
                             modifier = Modifier.weight(1f),
                         )
                     }
