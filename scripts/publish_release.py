@@ -23,7 +23,7 @@ VERSION_CONFIG = ROOT / "iosApp" / "Configuration" / "Version.xcconfig"
 LOCAL_PROPS = ROOT / "local.properties"
 APK_DIR = ROOT / "androidApp" / "build" / "outputs" / "apk" / "full" / "release"
 GITHUB_OWNER = "9000000"
-GITHUB_REPO = "NuvioMobileFast"
+GITHUB_REPO = "NuvioMobile-Fast"
 
 def read_current_version_and_code():
     version = "0.4.21"
