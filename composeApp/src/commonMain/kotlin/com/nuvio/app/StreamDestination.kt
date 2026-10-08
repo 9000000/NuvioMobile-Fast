@@ -32,6 +32,7 @@ import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.player.resolveContentLanguage
 import com.nuvio.app.features.player.sanitizePlaybackHeaders
 import com.nuvio.app.features.player.sanitizePlaybackResponseHeaders
+import com.nuvio.app.features.streams.LastSelectedStreamStore
 import com.nuvio.app.features.streams.StreamBehaviorHints
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamLaunchStore
@@ -150,6 +151,13 @@ internal fun StreamDestination(
         replaceStreamRoute: Boolean,
     ) {
         val infoHash = stream.p2pInfoHash ?: return
+        LastSelectedStreamStore.recordSelection(
+            videoId = effectiveVideoId,
+            parentMetaId = launch.parentMetaId,
+            seasonNumber = launch.seasonNumber,
+            episodeNumber = launch.episodeNumber,
+            stream = stream,
+        )
         val sentinelUrl = p2pSentinelUrl(infoHash, stream.p2pFileIdx)
         if (playerSettings.streamReuseLastLinkEnabled) {
             val cacheKey = StreamLinkCacheRepository.contentKey(
@@ -228,6 +236,13 @@ internal fun StreamDestination(
         forceInternal: Boolean = false,
     ) {
         val infoHash = stream.p2pInfoHash ?: return
+        LastSelectedStreamStore.recordSelection(
+            videoId = effectiveVideoId,
+            parentMetaId = launch.parentMetaId,
+            seasonNumber = launch.seasonNumber,
+            episodeNumber = launch.episodeNumber,
+            stream = stream,
+        )
         val magnetUri = com.nuvio.app.features.torrserver.buildTorrServerMagnet(stream, infoHash)
         val fileIdx = stream.p2pFileIdx ?: 0
         val torrConfig = TorrServerConfigRepository.uiState.value
@@ -637,6 +652,13 @@ internal fun StreamDestination(
         forceExternal: Boolean,
         forceInternal: Boolean,
     ) {
+        LastSelectedStreamStore.recordSelection(
+            videoId = effectiveVideoId,
+            parentMetaId = launch.parentMetaId,
+            seasonNumber = launch.seasonNumber,
+            episodeNumber = launch.episodeNumber,
+            stream = stream,
+        )
         if (DirectDebridPlaybackResolver.shouldResolveToPlayableStream(stream)) {
             if (resolvingDebridStream) return
             streamRouteScope.launch {
@@ -790,6 +812,13 @@ internal fun StreamDestination(
             manualSelection = launch.manualSelection,
             startFromBeginning = launch.startFromBeginning,
             onStreamSelected = { stream, resolvedResumePositionMs, resolvedResumeProgressFraction ->
+                LastSelectedStreamStore.recordSelection(
+                    videoId = effectiveVideoId,
+                    parentMetaId = launch.parentMetaId,
+                    seasonNumber = launch.seasonNumber,
+                    episodeNumber = launch.episodeNumber,
+                    stream = stream,
+                )
                 openSelectedStream(
                     stream = stream,
                     resolvedResumePositionMs = resolvedResumePositionMs,
@@ -799,6 +828,13 @@ internal fun StreamDestination(
                 )
             },
             onStreamActionOpen = { stream, openExternally, resolvedResumePositionMs, resolvedResumeProgressFraction ->
+                LastSelectedStreamStore.recordSelection(
+                    videoId = effectiveVideoId,
+                    parentMetaId = launch.parentMetaId,
+                    seasonNumber = launch.seasonNumber,
+                    episodeNumber = launch.episodeNumber,
+                    stream = stream,
+                )
                 openSelectedStream(
                     stream = stream,
                     resolvedResumePositionMs = resolvedResumePositionMs,

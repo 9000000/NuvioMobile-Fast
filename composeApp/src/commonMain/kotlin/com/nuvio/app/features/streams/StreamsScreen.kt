@@ -191,26 +191,42 @@ fun StreamsScreen(
     val effectiveResumePositionMs = resumeState.positionMs
     val effectiveResumeProgressFraction = resumeState.progressFraction
 
-    var lastSelectedStream by remember(videoId) { mutableStateOf<StreamItem?>(null) }
+    val lastSelectedStreamsMap by LastSelectedStreamStore.lastSelectedMap.collectAsStateWithLifecycle()
+    val recordedSelectedStream = remember(
+        lastSelectedStreamsMap,
+        videoId,
+        parentMetaId,
+        seasonNumber,
+        episodeNumber,
+    ) {
+        LastSelectedStreamStore.get(
+            videoId = videoId,
+            parentMetaId = parentMetaId,
+            seasonNumber = seasonNumber,
+            episodeNumber = episodeNumber,
+        )
+    }
+
+    var localSelectedStream by remember(videoId) { mutableStateOf<StreamItem?>(null) }
+    val effectiveSelectedStream = localSelectedStream ?: recordedSelectedStream
+
     var autoScrollTriggerKey by remember(videoId) {
-        mutableStateOf(if (storedProgress?.lastSourceUrl != null || storedProgress?.lastStreamTitle != null) 1 else 0)
+        mutableStateOf(1)
     }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        if (lastSelectedStream != null || storedProgress?.lastSourceUrl != null || storedProgress?.lastStreamTitle != null) {
-            autoScrollTriggerKey++
-        }
+        autoScrollTriggerKey++
     }
 
-    val currentTargetStream = remember(uiState.filteredGroups, lastSelectedStream, storedProgress) {
+    val currentTargetStream = remember(uiState.filteredGroups, effectiveSelectedStream, storedProgress) {
         val allVisible = uiState.filteredGroups.flatMap { it.streams }
-        allVisible.firstOrNull { it.matchesPlayback(lastSelectedStream, null) }
+        allVisible.firstOrNull { it.matchesPlayback(effectiveSelectedStream, null) }
             ?: allVisible.firstOrNull { it.matchesPlayback(null, storedProgress) }
     }
 
-    LaunchedEffect(uiState.groups, lastSelectedStream, storedProgress) {
+    LaunchedEffect(uiState.groups, effectiveSelectedStream, storedProgress) {
         val targetInAll = uiState.groups.flatMap { it.streams }.firstOrNull {
-            it.matchesPlayback(lastSelectedStream, null) || it.matchesPlayback(null, storedProgress)
+            it.matchesPlayback(effectiveSelectedStream, null) || it.matchesPlayback(null, storedProgress)
         } ?: return@LaunchedEffect
 
         if (uiState.selectedFilter != null && uiState.selectedFilter != targetInAll.addonId) {
@@ -300,7 +316,14 @@ fun StreamsScreen(
         val isTabletLayout = maxWidth >= 768.dp
 
         val handleStreamSelected: (StreamItem, Long?, Float?) -> Unit = { stream, positionMs, progressFraction ->
-            lastSelectedStream = stream
+            localSelectedStream = stream
+            LastSelectedStreamStore.recordSelection(
+                videoId = videoId,
+                parentMetaId = parentMetaId,
+                seasonNumber = seasonNumber,
+                episodeNumber = episodeNumber,
+                stream = stream,
+            )
             autoScrollTriggerKey++
             val isTorrServer = stream.addonName == "TorrServer" ||
                 (TorrServerConfigRepository.uiState.value.enabled && stream.p2pInfoHash != null)
@@ -478,7 +501,14 @@ fun StreamsScreen(
                 }
             },
             onOpen = { stream, openExternally ->
-                lastSelectedStream = stream
+                localSelectedStream = stream
+                LastSelectedStreamStore.recordSelection(
+                    videoId = videoId,
+                    parentMetaId = parentMetaId,
+                    seasonNumber = seasonNumber,
+                    episodeNumber = episodeNumber,
+                    stream = stream,
+                )
                 autoScrollTriggerKey++
                 onStreamActionOpen(
                     stream,
@@ -507,7 +537,14 @@ fun StreamsScreen(
                 val stream = torrentPickerStream ?: return@TorrentFilePickerDialog
                 torrentPickerStream = null
                 val customizedStream = stream.copy(fileIdx = fileId)
-                lastSelectedStream = customizedStream
+                localSelectedStream = customizedStream
+                LastSelectedStreamStore.recordSelection(
+                    videoId = videoId,
+                    parentMetaId = parentMetaId,
+                    seasonNumber = seasonNumber,
+                    episodeNumber = episodeNumber,
+                    stream = customizedStream,
+                )
                 autoScrollTriggerKey++
                 onStreamSelected(customizedStream, effectiveResumePositionMs, effectiveResumeProgressFraction)
             },
@@ -880,15 +917,15 @@ internal fun StreamList(
     }
 
     var lastScrolledTriggerKey by remember { mutableStateOf(-1) }
+    var lastScrolledTargetIndex by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(targetStreamIndex, autoScrollTriggerKey) {
         val index = targetStreamIndex ?: return@LaunchedEffect
-        if (autoScrollTriggerKey == 0) return@LaunchedEffect
-        if (lastScrolledTriggerKey == autoScrollTriggerKey) return@LaunchedEffect
+        if (lastScrolledTriggerKey == autoScrollTriggerKey && lastScrolledTargetIndex == index) return@LaunchedEffect
         lastScrolledTriggerKey = autoScrollTriggerKey
-        delay(120)
-        val targetScrollPosition = (index - 1).coerceAtLeast(0)
-        listState.animateScrollToItem(targetScrollPosition)
+        lastScrolledTargetIndex = index
+        delay(150)
+        listState.animateScrollToItem(index = index)
     }
 
     CompositionLocalProvider(LocalStreamSizeLabelFormat provides formatStreamSize) {
@@ -1100,14 +1137,23 @@ internal fun findStreamItemIndexInLazyColumn(
     return null
 }
 
+private fun String?.normalizedForMatch(): String =
+    this?.replace("\r\n", "\n")?.trim().orEmpty()
+
 internal fun StreamItem.matchesPlayback(
     selectedStream: StreamItem?,
     progress: WatchProgressEntry?,
 ): Boolean {
     if (selectedStream != null) {
         if (this === selectedStream) return true
+
+        // 1. URL exact match
         if (!playableDirectUrl.isNullOrBlank() && playableDirectUrl == selectedStream.playableDirectUrl) return true
         if (!directPlaybackUrl.isNullOrBlank() && directPlaybackUrl == selectedStream.directPlaybackUrl) return true
+        if (!url.isNullOrBlank() && url == selectedStream.url) return true
+        if (!externalUrl.isNullOrBlank() && externalUrl == selectedStream.externalUrl) return true
+
+        // 2. Torrent / P2P infoHash match
         val infoHash = p2pInfoHash
         if (!infoHash.isNullOrBlank() && infoHash.equals(selectedStream.p2pInfoHash, ignoreCase = true)) {
             val thisFileIdx = fileIdx ?: clientResolve?.fileIdx
@@ -1117,12 +1163,34 @@ internal fun StreamItem.matchesPlayback(
             }
             return true
         }
-        if (!url.isNullOrBlank() && url == selectedStream.url) return true
-        if (!externalUrl.isNullOrBlank() && externalUrl == selectedStream.externalUrl) return true
-        if (addonId == selectedStream.addonId &&
-            streamLabel.equals(selectedStream.streamLabel, ignoreCase = true) &&
-            streamSubtitle == selectedStream.streamSubtitle
-        ) {
+
+        // 3. Addon ID + Stream metadata match
+        if (addonId == selectedStream.addonId) {
+            val labelMatch = streamLabel.normalizedForMatch().equals(selectedStream.streamLabel.normalizedForMatch(), ignoreCase = true)
+            val subMatch = streamSubtitle.normalizedForMatch().equals(selectedStream.streamSubtitle.normalizedForMatch(), ignoreCase = true)
+            if (labelMatch && subMatch) {
+                return true
+            }
+
+            // Filename match within same addon
+            val thisFilename = behaviorHints.filename?.trim()
+            val targetFilename = selectedStream.behaviorHints.filename?.trim()
+            if (!thisFilename.isNullOrBlank() && thisFilename.equals(targetFilename, ignoreCase = true)) {
+                return true
+            }
+
+            // Size match + label match within same addon
+            val thisSize = behaviorHints.videoSize
+            val targetSize = selectedStream.behaviorHints.videoSize
+            if (labelMatch && thisSize != null && targetSize != null && thisSize == targetSize && thisSize > 0L) {
+                return true
+            }
+        }
+
+        // 4. Cross-addon or resolved stream fallback: Same filename if non-blank
+        val thisFilename = behaviorHints.filename?.trim()
+        val targetFilename = selectedStream.behaviorHints.filename?.trim()
+        if (!thisFilename.isNullOrBlank() && thisFilename.equals(targetFilename, ignoreCase = true)) {
             return true
         }
     }
@@ -1136,8 +1204,8 @@ internal fun StreamItem.matchesPlayback(
         }
         val addonMatch = progress.providerAddonId.isNullOrBlank() || addonId == progress.providerAddonId
         if (addonMatch) {
-            val progressTitle = progress.lastStreamTitle
-            if (!progressTitle.isNullOrBlank() && streamLabel.equals(progressTitle, ignoreCase = true)) {
+            val progressTitle = progress.lastStreamTitle?.normalizedForMatch()
+            if (!progressTitle.isNullOrBlank() && streamLabel.normalizedForMatch().equals(progressTitle, ignoreCase = true)) {
                 return true
             }
         }
