@@ -2531,6 +2531,8 @@
     <string name="stream_info_subtitle_source_addon">Tiện ích</string>
     <string name="stream_info_subtitle_source_embedded">Nhúng</string>
     <string name="stream_info_player_engine">Lõi trình phát</string>
+    <string name="library_sort_released_asc">Phát hành cũ nhất</string>
+    <string name="library_sort_released_desc">Phát hành mới nhất</string>
 </resources>
 
 
