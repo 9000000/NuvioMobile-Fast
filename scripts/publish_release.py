@@ -155,6 +155,7 @@ def upload_via_gh(tag, title, notes, apks, is_prerelease=False):
         "--target", target_branch,
         "--title", title,
         "--notes", notes,
+        "--clobber",
     ]
     if is_prerelease:
         cmd.append("--prerelease")
@@ -165,74 +166,137 @@ def upload_via_gh(tag, title, notes, apks, is_prerelease=False):
         return True
     return False
 
+def get_canonical_repo_url(token):
+    try:
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "NuvioMobileFast-Release-Script"
+            }
+        )
+        with urllib.request.urlopen(req) as resp:
+            return resp.geturl().rstrip("/")
+    except Exception:
+        return f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}"
+
 def upload_via_api(token, tag, title, notes, apks, is_prerelease=False):
     target_branch = get_current_branch()
     release_type_name = "Pre-release" if is_prerelease else "Release chính thức"
-    print(f"\n[3/3] Dang tao {release_type_name} va tai len APK qua GitHub API vao {GITHUB_OWNER}/{GITHUB_REPO} (nhanh: {target_branch})...")
-    create_url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases"
-    payload = json.dumps({
-        "tag_name": tag,
-        "target_commitish": target_branch,
-        "name": title,
-        "body": notes,
-        "draft": False,
-        "prerelease": is_prerelease
-    }).encode("utf-8")
-    
+    print(f"\n[3/3] Dang tao/cap nhat {release_type_name} va tai len APK qua GitHub API vao {GITHUB_OWNER}/{GITHUB_REPO} (nhanh: {target_branch})...")
+
+    canonical_repo = get_canonical_repo_url(token)
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
         "User-Agent": "NuvioMobileFast-Release-Script",
         "Content-Type": "application/json",
     }
-    
-    upload_url_template = ""
-    html_url = ""
-    req = urllib.request.Request(create_url, data=payload, headers=headers, method="POST")
+
+    release_data = None
+    get_tag_url = f"{canonical_repo}/releases/tags/{tag}"
+
+    # 1. Kiem tra xem Release da ton tai tren GitHub chua
     try:
-        with urllib.request.urlopen(req) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            upload_url_template = data.get("upload_url", "")
-            html_url = data.get("html_url", "")
+        get_req = urllib.request.Request(get_tag_url, headers=headers, method="GET")
+        with urllib.request.urlopen(get_req) as get_resp:
+            release_data = json.loads(get_resp.read().decode("utf-8"))
+            print(f"   [INFO] Phat hien Release {tag} da ton tai tren GitHub (ID: {release_data.get('id')}).")
+            print(f"   [OVERWRITE] Tien hanh cap nhat thong tin va ghi de cac tep APK...")
     except urllib.error.HTTPError as e:
-        err_msg = e.read().decode("utf-8", errors="replace")
-        if e.code in (301, 302, 307, 308):
-            redirect_url = e.headers.get("Location")
-            if redirect_url:
-                print(f"   [REDIRECT] Chuyen huong API den {redirect_url}...")
-                redir_req = urllib.request.Request(redirect_url, data=payload, headers=headers, method="POST")
+        if e.code != 404:
+            print(f"   [WARN] Kiem tra release theo tag (HTTP {e.code}): {e}")
+    except Exception as e:
+        print(f"   [WARN] Loi khi kiem tra release ton tai: {e}")
+
+    # 2. Neu release da ton tai -> Cap nhat thong tin (PATCH)
+    if release_data:
+        release_id = release_data.get("id")
+        patch_url = f"{canonical_repo}/releases/{release_id}"
+        patch_payload = json.dumps({
+            "name": title,
+            "body": notes,
+            "prerelease": is_prerelease
+        }).encode("utf-8")
+        try:
+            patch_req = urllib.request.Request(patch_url, data=patch_payload, headers=headers, method="PATCH")
+            with urllib.request.urlopen(patch_req) as patch_resp:
+                release_data = json.loads(patch_resp.read().decode("utf-8"))
+                print(f"   [UPDATE] Da cap nhat tieu de va ghi chu cho Release {tag}")
+        except Exception as patch_err:
+            print(f"   [WARN] Khong the cap nhat thong tin release: {patch_err}")
+
+    # 3. Neu release chua ton tai -> Tao moi (POST)
+    if not release_data:
+        create_url = f"{canonical_repo}/releases"
+        payload = json.dumps({
+            "tag_name": tag,
+            "target_commitish": target_branch,
+            "name": title,
+            "body": notes,
+            "draft": False,
+            "prerelease": is_prerelease
+        }).encode("utf-8")
+
+        req = urllib.request.Request(create_url, data=payload, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req) as resp:
+                release_data = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            err_msg = e.read().decode("utf-8", errors="replace")
+            # Fallback neu tag da ton tai (HTTP 422)
+            if e.code == 422:
+                print(f"   [INFO] Tag {tag} da ton tai tren GitHub, dang lay thong tin release...")
                 try:
-                    with urllib.request.urlopen(redir_req) as resp:
-                        data = json.loads(resp.read().decode("utf-8"))
-                        upload_url_template = data.get("upload_url", "")
-                        html_url = data.get("html_url", "")
-                except Exception as redir_err:
-                    print(f"[ERROR] Loi sau chuyen huong: {redir_err}")
+                    get_req = urllib.request.Request(get_tag_url, headers=headers, method="GET")
+                    with urllib.request.urlopen(get_req) as get_resp:
+                        release_data = json.loads(get_resp.read().decode("utf-8"))
+                except Exception as get_err:
+                    print(f"[ERROR] Khong the lay thong tin release {tag}: {get_err}")
                     return False
-        elif e.code == 422:
-            print(f"   [INFO] Release {tag} da ton tai, dang lay thong tin upload...")
-            try:
-                get_url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/tags/{tag}"
-                get_req = urllib.request.Request(get_url, headers=headers, method="GET")
-                with urllib.request.urlopen(get_req) as get_resp:
-                    data = json.loads(get_resp.read().decode("utf-8"))
-                    upload_url_template = data.get("upload_url", "")
-                    html_url = data.get("html_url", "")
-            except Exception as get_err:
-                print(f"[ERROR] Khong the lay thong tin release {tag}: {get_err}")
+            else:
+                print(f"[ERROR] Loi tao release qua GitHub API: HTTP {e.code} - {err_msg}")
                 return False
-        else:
-            print(f"[ERROR] Loi tao release qua GitHub API: HTTP {e.code} - {err_msg}")
+        except Exception as e:
+            print(f"[ERROR] Loi ket noi khi tao release: {e}")
             return False
-    
+
+    if not release_data:
+        print(f"[ERROR] Khong the lay hoac tao release tren GitHub!")
+        return False
+
+    upload_url_template = release_data.get("upload_url", "")
+    html_url = release_data.get("html_url", "")
     upload_url_base = upload_url_template.split("{")[0]
-    
+
+    # 4. Lay danh sach asset cu de xoa file trung ten truoc khi upload ghi de
+    existing_assets = {a.get("name"): a.get("id") for a in release_data.get("assets", []) if a.get("name") and a.get("id")}
+
     for apk in apks:
+        # Xoa asset cu neu trung ten tren GitHub
+        if apk.name in existing_assets:
+            old_asset_id = existing_assets[apk.name]
+            print(f"   [DELETE] Xoa asset cu tren GitHub: {apk.name} (ID: {old_asset_id})...")
+            del_url = f"{canonical_repo}/releases/assets/{old_asset_id}"
+            del_headers = {
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "NuvioMobileFast-Release-Script",
+            }
+            del_req = urllib.request.Request(del_url, headers=del_headers, method="DELETE")
+            try:
+                with urllib.request.urlopen(del_req) as del_resp:
+                    print(f"   [OK] Da xoa asset cu: {apk.name}")
+            except Exception as del_err:
+                print(f"   [WARN] Khong the xoa asset cu {apk.name}: {del_err}")
+
+        # Upload asset moi
         size_mb = apk.stat().st_size / (1024 * 1024)
         print(f"   [UPLOAD] Dang tai len {apk.name} ({size_mb:.2f} MB)...")
         with open(apk, "rb") as f:
             apk_bytes = f.read()
-        
+
         target_url = f"{upload_url_base}?name={apk.name}"
         up_headers = {
             "Authorization": f"Bearer {token}",
@@ -246,9 +310,9 @@ def upload_via_api(token, tag, title, notes, apks, is_prerelease=False):
             with urllib.request.urlopen(up_req) as up_resp:
                 print(f"   [DONE] Da tai xong: {apk.name}")
         except urllib.error.HTTPError as e:
-            print(f"   [FAIL] Loi tai len {apk.name}: HTTP {e.code} - {e.read().decode('utf-8')}")
+            print(f"   [FAIL] Loi tai len {apk.name}: HTTP {e.code} - {e.read().decode('utf-8', errors='replace')}")
             return False
-    
+
     print(f"\n[SUCCESS] Da phat hanh Release {tag} thanh cong tai:")
     print(f"-> {html_url}\n")
     return True

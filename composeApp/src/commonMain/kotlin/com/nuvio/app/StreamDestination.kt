@@ -144,6 +144,27 @@ internal fun StreamDestination(
         )
     }
 
+    fun recordStreamSelectionSafely(streamToRecord: StreamItem) {
+        val currentStored = LastSelectedStreamStore.get(
+            videoId = effectiveVideoId,
+            parentMetaId = launch.parentMetaId ?: effectiveVideoId,
+            seasonNumber = launch.seasonNumber,
+            episodeNumber = launch.episodeNumber,
+        )
+        val infoHash = streamToRecord.p2pInfoHash
+        if (currentStored == null || infoHash == null || currentStored.p2pInfoHash != infoHash) {
+            LastSelectedStreamStore.recordSelection(
+                videoId = effectiveVideoId,
+                parentMetaId = launch.parentMetaId ?: effectiveVideoId,
+                seasonNumber = launch.seasonNumber,
+                episodeNumber = launch.episodeNumber,
+                stream = streamToRecord,
+            )
+        } else {
+            LastSelectedStreamStore.requestAutoScroll()
+        }
+    }
+
     fun openP2pStream(
         stream: StreamItem,
         resolvedResumePositionMs: Long?,
@@ -151,13 +172,7 @@ internal fun StreamDestination(
         replaceStreamRoute: Boolean,
     ) {
         val infoHash = stream.p2pInfoHash ?: return
-        LastSelectedStreamStore.recordSelection(
-            videoId = effectiveVideoId,
-            parentMetaId = launch.parentMetaId,
-            seasonNumber = launch.seasonNumber,
-            episodeNumber = launch.episodeNumber,
-            stream = stream,
-        )
+        recordStreamSelectionSafely(stream)
         val sentinelUrl = p2pSentinelUrl(infoHash, stream.p2pFileIdx)
         if (playerSettings.streamReuseLastLinkEnabled) {
             val cacheKey = StreamLinkCacheRepository.contentKey(
@@ -236,13 +251,7 @@ internal fun StreamDestination(
         forceInternal: Boolean = false,
     ) {
         val infoHash = stream.p2pInfoHash ?: return
-        LastSelectedStreamStore.recordSelection(
-            videoId = effectiveVideoId,
-            parentMetaId = launch.parentMetaId,
-            seasonNumber = launch.seasonNumber,
-            episodeNumber = launch.episodeNumber,
-            stream = stream,
-        )
+        recordStreamSelectionSafely(stream)
         val magnetUri = com.nuvio.app.features.torrserver.buildTorrServerMagnet(stream, infoHash)
         val fileIdx = stream.p2pFileIdx ?: 0
         val torrConfig = TorrServerConfigRepository.uiState.value
@@ -661,13 +670,7 @@ internal fun StreamDestination(
         isResolvedDebridCall: Boolean = false,
     ) {
         if (!isResolvedDebridCall) {
-            LastSelectedStreamStore.recordSelection(
-                videoId = effectiveVideoId,
-                parentMetaId = launch.parentMetaId,
-                seasonNumber = launch.seasonNumber,
-                episodeNumber = launch.episodeNumber,
-                stream = stream,
-            )
+            recordStreamSelectionSafely(stream)
         }
         if (DirectDebridPlaybackResolver.shouldResolveToPlayableStream(stream)) {
             if (resolvingDebridStream) return
@@ -823,13 +826,7 @@ internal fun StreamDestination(
             manualSelection = launch.manualSelection,
             startFromBeginning = launch.startFromBeginning,
             onStreamSelected = { stream, resolvedResumePositionMs, resolvedResumeProgressFraction ->
-                LastSelectedStreamStore.recordSelection(
-                    videoId = effectiveVideoId,
-                    parentMetaId = launch.parentMetaId,
-                    seasonNumber = launch.seasonNumber,
-                    episodeNumber = launch.episodeNumber,
-                    stream = stream,
-                )
+                recordStreamSelectionSafely(stream)
                 openSelectedStream(
                     stream = stream,
                     resolvedResumePositionMs = resolvedResumePositionMs,
@@ -839,13 +836,7 @@ internal fun StreamDestination(
                 )
             },
             onStreamActionOpen = { stream, openExternally, resolvedResumePositionMs, resolvedResumeProgressFraction ->
-                LastSelectedStreamStore.recordSelection(
-                    videoId = effectiveVideoId,
-                    parentMetaId = launch.parentMetaId,
-                    seasonNumber = launch.seasonNumber,
-                    episodeNumber = launch.episodeNumber,
-                    stream = stream,
-                )
+                recordStreamSelectionSafely(stream)
                 openSelectedStream(
                     stream = stream,
                     resolvedResumePositionMs = resolvedResumePositionMs,

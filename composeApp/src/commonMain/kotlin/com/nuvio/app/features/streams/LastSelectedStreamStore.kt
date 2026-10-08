@@ -44,7 +44,21 @@ object LastSelectedStreamStore {
     ) {
         val key = contentKey(videoId, parentMetaId, seasonNumber, episodeNumber)
         val normalizedVideoId = videoId.trim()
-        _lastSelectedMap.value = _lastSelectedMap.value + (key to stream) + (normalizedVideoId to stream)
+        val metaKey = if (!parentMetaId.isNullOrBlank() && seasonNumber != null && episodeNumber != null) {
+            "${parentMetaId.trim()}:s$seasonNumber:e$episodeNumber"
+        } else null
+        val episodeKey = if (seasonNumber != null && episodeNumber != null) {
+            "${normalizedVideoId}:s$seasonNumber:e$episodeNumber"
+        } else null
+
+        val updates = mutableMapOf<String, StreamItem>(
+            key to stream,
+            normalizedVideoId to stream,
+        )
+        if (metaKey != null) updates[metaKey] = stream
+        if (episodeKey != null) updates[episodeKey] = stream
+
+        _lastSelectedMap.value = _lastSelectedMap.value + updates
         _lastSelectedGlobalStream.value = stream
         requestAutoScroll()
     }
@@ -56,8 +70,19 @@ object LastSelectedStreamStore {
         episodeNumber: Int? = null,
     ): StreamItem? {
         val key = contentKey(videoId, parentMetaId, seasonNumber, episodeNumber)
+        val normalizedVideoId = videoId.trim()
+        val metaKey = if (!parentMetaId.isNullOrBlank() && seasonNumber != null && episodeNumber != null) {
+            "${parentMetaId.trim()}:s$seasonNumber:e$episodeNumber"
+        } else null
+        val episodeKey = if (seasonNumber != null && episodeNumber != null) {
+            "${normalizedVideoId}:s$seasonNumber:e$episodeNumber"
+        } else null
+
         val map = _lastSelectedMap.value
-        return map[key] ?: map[videoId.trim()]
+        return map[key]
+            ?: (metaKey?.let { map[it] })
+            ?: (episodeKey?.let { map[it] })
+            ?: map[normalizedVideoId]
     }
 
     fun clear(

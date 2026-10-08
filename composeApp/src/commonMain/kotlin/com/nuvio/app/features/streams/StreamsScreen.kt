@@ -567,7 +567,7 @@ fun StreamsScreen(
                     parentMetaId = parentMetaId,
                     seasonNumber = seasonNumber,
                     episodeNumber = episodeNumber,
-                    stream = customizedStream,
+                    stream = stream,
                 )
                 manualScrollTrigger++
                 onStreamSelected(customizedStream, effectiveResumePositionMs, effectiveResumeProgressFraction)
@@ -937,7 +937,7 @@ internal fun StreamList(
             filteredGroups = filteredGroups,
             showHeader = uiState.selectedFilter == null,
             isTarget = { stream ->
-                stream === currentTargetStream
+                stream === currentTargetStream || (currentTargetStream != null && stream.matchesPlayback(currentTargetStream, null))
             },
         )
     }
@@ -1079,7 +1079,7 @@ private fun LazyListScope.streamSection(
                     !AppFeaturePolicy.p2pEnabled &&
                     !isTorrServerEnabled &&
                     !(debridEnabled && stream.isAddonDebridCandidate)
-            val isCurrentStream = currentTargetStream != null && stream === currentTargetStream
+            val isCurrentStream = currentTargetStream != null && (stream === currentTargetStream || stream.matchesPlayback(currentTargetStream, null))
             StreamCard(
                 stream = stream,
                 enabled = isSelectable || isUnsupportedTorrentStream,
@@ -1195,38 +1195,46 @@ internal fun StreamItem.matchesPlayback(
         val isTargetTorrent = selectedStream.isTorrentStream || !targetHash.isNullOrBlank()
 
         if (isThisTorrent || isTargetTorrent) {
-            if (thisHash.isNullOrBlank() || targetHash.isNullOrBlank()) {
+            if (!thisHash.isNullOrBlank() && !targetHash.isNullOrBlank()) {
+                if (thisHash.equals(targetHash, ignoreCase = true)) {
+                    // Cùng một torrent infoHash!
+                    if (addonId == selectedStream.addonId) {
+                        val thisNormLabel = streamLabel.normalizedForMatch()
+                        val targetNormLabel = selectedStream.streamLabel.normalizedForMatch()
+                        if (thisNormLabel.equals(targetNormLabel, ignoreCase = true)) {
+                            return true
+                        }
+                    }
+
+                    val thisFileIdx = fileIdx ?: clientResolve?.fileIdx
+                    val targetFileIdx = selectedStream.fileIdx ?: selectedStream.clientResolve?.fileIdx
+                    if (thisFileIdx != null && targetFileIdx != null && thisFileIdx == targetFileIdx) {
+                        return true
+                    }
+
+                    val thisNormLabel = streamLabel.normalizedForMatch()
+                    val targetNormLabel = selectedStream.streamLabel.normalizedForMatch()
+                    if (thisNormLabel.equals(targetNormLabel, ignoreCase = true)) {
+                        return true
+                    }
+
+                    val thisSub = streamSubtitle.normalizedForMatch()
+                    val targetSub = selectedStream.streamSubtitle.normalizedForMatch()
+                    if (thisSub.isNotBlank() && targetSub.isNotBlank() && thisSub.equals(targetSub, ignoreCase = true)) {
+                        return true
+                    }
+
+                    if (addonId == selectedStream.addonId) {
+                        return true
+                    }
+
+                    return true
+                } else {
+                    return false
+                }
+            } else if (!thisHash.isNullOrBlank() || !targetHash.isNullOrBlank()) {
                 return false
             }
-            if (!thisHash.equals(targetHash, ignoreCase = true)) {
-                return false
-            }
-
-            val thisFileIdx = fileIdx ?: clientResolve?.fileIdx
-            val targetFileIdx = selectedStream.fileIdx ?: selectedStream.clientResolve?.fileIdx
-            if (thisFileIdx != null && targetFileIdx != null && thisFileIdx != targetFileIdx) {
-                return false
-            }
-
-            val thisFilename = behaviorHints.filename?.trim()
-            val targetFilename = selectedStream.behaviorHints.filename?.trim()
-            if (!thisFilename.isNullOrBlank() && !targetFilename.isNullOrBlank()) {
-                if (!thisFilename.equals(targetFilename, ignoreCase = true)) return false
-            }
-
-            val thisSize = behaviorHints.videoSize
-            val targetSize = selectedStream.behaviorHints.videoSize
-            if (thisSize != null && targetSize != null && thisSize > 0L && targetSize > 0L) {
-                if (thisSize != targetSize) return false
-            }
-
-            val thisSub = streamSubtitle.normalizedForMatch()
-            val targetSub = selectedStream.streamSubtitle.normalizedForMatch()
-            if (thisSub.isNotBlank() && targetSub.isNotBlank()) {
-                if (!thisSub.equals(targetSub, ignoreCase = true)) return false
-            }
-
-            return true
         }
 
         // 3. Filename match
@@ -1288,41 +1296,38 @@ internal fun StreamItem.matchesPlayback(
 
     if (progress != null) {
         val lastUrl = progress.lastSourceUrl?.trim()
-        if (!lastUrl.isNullOrBlank()) {
-            if (playableDirectUrl == lastUrl || directPlaybackUrl == lastUrl || url == lastUrl) return true
+        val infoHash = p2pInfoHash
 
-            val infoHash = p2pInfoHash
-            if (!infoHash.isNullOrBlank() && lastUrl.contains(infoHash, ignoreCase = true)) {
-                val parsedIndex = extractFileIndexFromUrl(lastUrl)
-                val thisFileIdx = fileIdx ?: clientResolve?.fileIdx
-                if (parsedIndex != null && thisFileIdx != null && parsedIndex != thisFileIdx) {
-                    return false
-                }
-                val thisFilename = behaviorHints.filename?.trim()
-                if (!thisFilename.isNullOrBlank() && lastUrl.contains(thisFilename, ignoreCase = true)) {
-                    return true
+        // 1. Torrent infoHash match trong URL
+        if (!infoHash.isNullOrBlank() && !lastUrl.isNullOrBlank() && lastUrl.contains(infoHash, ignoreCase = true)) {
+            val addonMatch = progress.providerAddonId.isNullOrBlank() || addonId == progress.providerAddonId
+            if (addonMatch) {
+                val progressTitle = progress.lastStreamTitle?.normalizedForMatch()
+                if (!progressTitle.isNullOrBlank()) {
+                    if (streamLabel.normalizedForMatch().equals(progressTitle, ignoreCase = true)) {
+                        return true
+                    }
                 }
                 return true
             }
-
-            val thisFilename = behaviorHints.filename?.trim()
-            if (!thisFilename.isNullOrBlank() && lastUrl.contains(thisFilename, ignoreCase = true)) return true
         }
 
-        val addonMatch = progress.providerAddonId.isNullOrBlank() || addonId == progress.providerAddonId
+        // 2. Exact URL match
+        if (!lastUrl.isNullOrBlank()) {
+            if (playableDirectUrl == lastUrl || directPlaybackUrl == lastUrl || url == lastUrl) return true
+        }
+
+        // 3. Addon ID + Stream title exact match
+        val addonMatch = !progress.providerAddonId.isNullOrBlank() && addonId == progress.providerAddonId
         if (addonMatch) {
             val progressTitle = progress.lastStreamTitle?.normalizedForMatch()
             if (!progressTitle.isNullOrBlank()) {
-                val thisFilename = behaviorHints.filename?.trim()
-                if (!thisFilename.isNullOrBlank() && thisFilename.equals(progressTitle, ignoreCase = true)) {
+                val thisNormLabel = streamLabel.normalizedForMatch()
+                if (thisNormLabel.equals(progressTitle, ignoreCase = true)) {
                     return true
                 }
                 val thisSub = streamSubtitle.normalizedForMatch()
                 if (thisSub.isNotBlank() && thisSub.equals(progressTitle, ignoreCase = true)) {
-                    return true
-                }
-                val thisTitle = title?.normalizedForMatch()
-                if (!thisTitle.isNullOrBlank() && thisTitle.equals(progressTitle, ignoreCase = true) && thisTitle != streamLabel.normalizedForMatch()) {
                     return true
                 }
             }
