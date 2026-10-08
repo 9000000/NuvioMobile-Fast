@@ -645,20 +645,30 @@ internal fun StreamDestination(
         return
     }
 
+    val isCurrentRoute = navController.currentRoute == route
+    LaunchedEffect(isCurrentRoute) {
+        if (isCurrentRoute) {
+            LastSelectedStreamStore.requestAutoScroll()
+        }
+    }
+
     fun openSelectedStream(
         stream: StreamItem,
         resolvedResumePositionMs: Long?,
         resolvedResumeProgressFraction: Float?,
         forceExternal: Boolean,
         forceInternal: Boolean,
+        isResolvedDebridCall: Boolean = false,
     ) {
-        LastSelectedStreamStore.recordSelection(
-            videoId = effectiveVideoId,
-            parentMetaId = launch.parentMetaId,
-            seasonNumber = launch.seasonNumber,
-            episodeNumber = launch.episodeNumber,
-            stream = stream,
-        )
+        if (!isResolvedDebridCall) {
+            LastSelectedStreamStore.recordSelection(
+                videoId = effectiveVideoId,
+                parentMetaId = launch.parentMetaId,
+                seasonNumber = launch.seasonNumber,
+                episodeNumber = launch.episodeNumber,
+                stream = stream,
+            )
+        }
         if (DirectDebridPlaybackResolver.shouldResolveToPlayableStream(stream)) {
             if (resolvingDebridStream) return
             streamRouteScope.launch {
@@ -676,6 +686,7 @@ internal fun StreamDestination(
                         resolvedResumeProgressFraction = resolvedResumeProgressFraction,
                         forceExternal = forceExternal,
                         forceInternal = forceInternal,
+                        isResolvedDebridCall = true,
                     )
                     else -> {
                         resolved.toastMessage()?.let { NuvioToastController.show(it) }

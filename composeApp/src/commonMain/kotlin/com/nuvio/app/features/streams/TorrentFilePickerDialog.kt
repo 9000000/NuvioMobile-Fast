@@ -27,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -102,6 +103,14 @@ internal fun TorrentFilePickerDialog(
                 isVideo = isVideo,
                 isMatched = isMatched,
             )
+        }
+    }
+
+    LaunchedEffect(uiFiles) {
+        if (uiFiles.isEmpty()) return@LaunchedEffect
+        val matchIndex = uiFiles.indexOfFirst { it.isMatched }
+        if (matchIndex > 0) {
+            listState.scrollToItem(matchIndex)
         }
     }
 

@@ -12,6 +12,16 @@ object LastSelectedStreamStore {
     private val _lastSelectedMap = MutableStateFlow<Map<String, StreamItem>>(emptyMap())
     val lastSelectedMap: StateFlow<Map<String, StreamItem>> = _lastSelectedMap.asStateFlow()
 
+    private val _lastSelectedGlobalStream = MutableStateFlow<StreamItem?>(null)
+    val lastSelectedGlobalStream: StateFlow<StreamItem?> = _lastSelectedGlobalStream.asStateFlow()
+
+    private val _scrollTrigger = MutableStateFlow(0)
+    val scrollTrigger: StateFlow<Int> = _scrollTrigger.asStateFlow()
+
+    fun requestAutoScroll() {
+        _scrollTrigger.value++
+    }
+
     fun contentKey(
         videoId: String,
         parentMetaId: String? = null,
@@ -35,6 +45,8 @@ object LastSelectedStreamStore {
         val key = contentKey(videoId, parentMetaId, seasonNumber, episodeNumber)
         val normalizedVideoId = videoId.trim()
         _lastSelectedMap.value = _lastSelectedMap.value + (key to stream) + (normalizedVideoId to stream)
+        _lastSelectedGlobalStream.value = stream
+        requestAutoScroll()
     }
 
     fun get(
@@ -56,6 +68,10 @@ object LastSelectedStreamStore {
     ) {
         val key = contentKey(videoId, parentMetaId, seasonNumber, episodeNumber)
         val normalizedVideoId = videoId.trim()
+        val current = get(videoId, parentMetaId, seasonNumber, episodeNumber)
         _lastSelectedMap.value = _lastSelectedMap.value - key - normalizedVideoId
+        if (current != null && _lastSelectedGlobalStream.value?.matchesPlayback(current, null) == true) {
+            _lastSelectedGlobalStream.value = null
+        }
     }
 }

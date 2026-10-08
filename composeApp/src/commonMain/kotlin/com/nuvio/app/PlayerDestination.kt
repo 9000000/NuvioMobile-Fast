@@ -14,6 +14,7 @@ import com.nuvio.app.features.player.ExternalPlayerPlatform
 import com.nuvio.app.features.player.PlayerLaunch
 import com.nuvio.app.features.player.PlayerLaunchStore
 import com.nuvio.app.features.player.PlayerScreen
+import com.nuvio.app.features.streams.LastSelectedStreamStore
 import com.nuvio.app.features.watchprogress.ResumePromptRepository
 import com.nuvio.app.navigation.NuvioNavigator
 import com.nuvio.app.navigation.PlayerRoute
@@ -43,6 +44,7 @@ internal fun PlayerDestination(
     }
     DisposableEffect(route.launchId) {
         onDispose {
+            LastSelectedStreamStore.requestAutoScroll()
             if (launch.contentType == "live" || launch.providerAddonId == "live-tv") {
                 LiveTvRepository.requestScrollToLastWatched()
             }

@@ -192,6 +192,9 @@ fun StreamsScreen(
     val effectiveResumeProgressFraction = resumeState.progressFraction
 
     val lastSelectedStreamsMap by LastSelectedStreamStore.lastSelectedMap.collectAsStateWithLifecycle()
+    val globalLastStream by LastSelectedStreamStore.lastSelectedGlobalStream.collectAsStateWithLifecycle()
+    val scrollTrigger by LastSelectedStreamStore.scrollTrigger.collectAsStateWithLifecycle()
+
     val recordedSelectedStream = remember(
         lastSelectedStreamsMap,
         videoId,
@@ -210,23 +213,44 @@ fun StreamsScreen(
     var localSelectedStream by remember(videoId) { mutableStateOf<StreamItem?>(null) }
     val effectiveSelectedStream = localSelectedStream ?: recordedSelectedStream
 
-    var autoScrollTriggerKey by remember(videoId) {
+    var manualScrollTrigger by remember(videoId) {
         mutableStateOf(1)
     }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        autoScrollTriggerKey++
+        manualScrollTrigger++
+        LastSelectedStreamStore.requestAutoScroll()
     }
 
-    val currentTargetStream = remember(uiState.filteredGroups, effectiveSelectedStream, storedProgress) {
+    val combinedScrollTrigger = manualScrollTrigger + scrollTrigger
+
+    val currentTargetStream = remember(
+        uiState.filteredGroups,
+        effectiveSelectedStream,
+        storedProgress,
+    ) {
         val allVisible = uiState.filteredGroups.flatMap { it.streams }
-        allVisible.firstOrNull { it.matchesPlayback(effectiveSelectedStream, null) }
-            ?: allVisible.firstOrNull { it.matchesPlayback(null, storedProgress) }
+        if (effectiveSelectedStream != null) {
+            allVisible.firstOrNull { it === effectiveSelectedStream }
+                ?: allVisible.firstOrNull { it.matchesPlayback(effectiveSelectedStream, null) }
+        } else if (storedProgress != null) {
+            allVisible.firstOrNull { it.matchesPlayback(null, storedProgress) }
+        } else {
+            null
+        }
     }
 
     LaunchedEffect(uiState.groups, effectiveSelectedStream, storedProgress) {
-        val targetInAll = uiState.groups.flatMap { it.streams }.firstOrNull {
-            it.matchesPlayback(effectiveSelectedStream, null) || it.matchesPlayback(null, storedProgress)
+        val allStreams = uiState.groups.flatMap { it.streams }
+        val targetInAll = when {
+            effectiveSelectedStream != null -> {
+                allStreams.firstOrNull { it === effectiveSelectedStream }
+                    ?: allStreams.firstOrNull { it.matchesPlayback(effectiveSelectedStream, null) }
+            }
+            storedProgress != null -> {
+                allStreams.firstOrNull { it.matchesPlayback(null, storedProgress) }
+            }
+            else -> null
         } ?: return@LaunchedEffect
 
         if (uiState.selectedFilter != null && uiState.selectedFilter != targetInAll.addonId) {
@@ -324,7 +348,7 @@ fun StreamsScreen(
                 episodeNumber = episodeNumber,
                 stream = stream,
             )
-            autoScrollTriggerKey++
+            manualScrollTrigger++
             val isTorrServer = stream.addonName == "TorrServer" ||
                 (TorrServerConfigRepository.uiState.value.enabled && stream.p2pInfoHash != null)
             if (isTorrServer) {
@@ -351,7 +375,7 @@ fun StreamsScreen(
                 resumePositionMs = effectiveResumePositionMs,
                 resumeProgressFraction = effectiveResumeProgressFraction,
                 currentTargetStream = currentTargetStream,
-                autoScrollTriggerKey = autoScrollTriggerKey,
+                autoScrollTriggerKey = combinedScrollTrigger,
                 onStreamSelected = handleStreamSelected,
                 onStreamLongPress = { stream -> streamActionsTarget = stream },
                 onRefresh = reloadStreams,
@@ -373,7 +397,7 @@ fun StreamsScreen(
                 resumePositionMs = effectiveResumePositionMs,
                 resumeProgressFraction = effectiveResumeProgressFraction,
                 currentTargetStream = currentTargetStream,
-                autoScrollTriggerKey = autoScrollTriggerKey,
+                autoScrollTriggerKey = combinedScrollTrigger,
                 onStreamSelected = handleStreamSelected,
                 onStreamLongPress = { stream -> streamActionsTarget = stream },
                 onRefresh = reloadStreams,
@@ -509,7 +533,7 @@ fun StreamsScreen(
                     episodeNumber = episodeNumber,
                     stream = stream,
                 )
-                autoScrollTriggerKey++
+                manualScrollTrigger++
                 onStreamActionOpen(
                     stream,
                     openExternally,
@@ -537,7 +561,7 @@ fun StreamsScreen(
                 val stream = torrentPickerStream ?: return@TorrentFilePickerDialog
                 torrentPickerStream = null
                 val customizedStream = stream.copy(fileIdx = fileId)
-                localSelectedStream = customizedStream
+                localSelectedStream = stream
                 LastSelectedStreamStore.recordSelection(
                     videoId = videoId,
                     parentMetaId = parentMetaId,
@@ -545,7 +569,7 @@ fun StreamsScreen(
                     episodeNumber = episodeNumber,
                     stream = customizedStream,
                 )
-                autoScrollTriggerKey++
+                manualScrollTrigger++
                 onStreamSelected(customizedStream, effectiveResumePositionMs, effectiveResumeProgressFraction)
             },
         )
@@ -904,6 +928,8 @@ internal fun StreamList(
     }.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
+    val storeScrollTrigger by LastSelectedStreamStore.scrollTrigger.collectAsStateWithLifecycle()
+    val combinedTrigger = autoScrollTriggerKey + storeScrollTrigger
 
     val targetStreamIndex = remember(filteredGroups, currentTargetStream, uiState.selectedFilter) {
         if (currentTargetStream == null) null
@@ -911,20 +937,25 @@ internal fun StreamList(
             filteredGroups = filteredGroups,
             showHeader = uiState.selectedFilter == null,
             isTarget = { stream ->
-                stream === currentTargetStream || stream.matchesPlayback(currentTargetStream, null)
+                stream === currentTargetStream
             },
         )
     }
 
-    var lastScrolledTriggerKey by remember { mutableStateOf(-1) }
-    var lastScrolledTargetIndex by remember { mutableStateOf<Int?>(null) }
+    var lastScrolledTrigger by remember { mutableStateOf(-1) }
+    var lastScrolledIndex by remember { mutableStateOf<Int?>(null) }
 
-    LaunchedEffect(targetStreamIndex, autoScrollTriggerKey) {
+    LaunchedEffect(targetStreamIndex, combinedTrigger) {
         val index = targetStreamIndex ?: return@LaunchedEffect
-        if (lastScrolledTriggerKey == autoScrollTriggerKey && lastScrolledTargetIndex == index) return@LaunchedEffect
-        lastScrolledTriggerKey = autoScrollTriggerKey
-        lastScrolledTargetIndex = index
-        delay(150)
+        if (lastScrolledTrigger == combinedTrigger && lastScrolledIndex == index) return@LaunchedEffect
+        lastScrolledTrigger = combinedTrigger
+        lastScrolledIndex = index
+        delay(250)
+        val firstVisible = listState.firstVisibleItemIndex
+        if (kotlin.math.abs(firstVisible - index) > 12) {
+            val jumpTo = if (index > firstVisible) index - 6 else index + 6
+            listState.scrollToItem(jumpTo.coerceAtLeast(0))
+        }
         listState.animateScrollToItem(index = index)
     }
 
@@ -1048,9 +1079,7 @@ private fun LazyListScope.streamSection(
                     !AppFeaturePolicy.p2pEnabled &&
                     !isTorrServerEnabled &&
                     !(debridEnabled && stream.isAddonDebridCandidate)
-            val isCurrentStream = currentTargetStream != null && (
-                stream === currentTargetStream || stream.matchesPlayback(currentTargetStream, null)
-            )
+            val isCurrentStream = currentTargetStream != null && stream === currentTargetStream
             StreamCard(
                 stream = stream,
                 enabled = isSelectable || isUnsupportedTorrentStream,
@@ -1140,6 +1169,12 @@ internal fun findStreamItemIndexInLazyColumn(
 private fun String?.normalizedForMatch(): String =
     this?.replace("\r\n", "\n")?.trim().orEmpty()
 
+private fun extractFileIndexFromUrl(url: String): Int? {
+    val indexParam = Regex("""[?&]index=(\d+)""").find(url)?.groupValues?.get(1)?.toIntOrNull()
+    if (indexParam != null) return indexParam
+    return Regex("""/play/[^/]+/(\d+)""").find(url)?.groupValues?.get(1)?.toIntOrNull()
+}
+
 internal fun StreamItem.matchesPlayback(
     selectedStream: StreamItem?,
     progress: WatchProgressEntry?,
@@ -1153,45 +1188,101 @@ internal fun StreamItem.matchesPlayback(
         if (!url.isNullOrBlank() && url == selectedStream.url) return true
         if (!externalUrl.isNullOrBlank() && externalUrl == selectedStream.externalUrl) return true
 
-        // 2. Torrent / P2P infoHash match
-        val infoHash = p2pInfoHash
-        if (!infoHash.isNullOrBlank() && infoHash.equals(selectedStream.p2pInfoHash, ignoreCase = true)) {
+        // 2. Torrent / P2P match
+        val thisHash = p2pInfoHash
+        val targetHash = selectedStream.p2pInfoHash
+        val isThisTorrent = isTorrentStream || !thisHash.isNullOrBlank()
+        val isTargetTorrent = selectedStream.isTorrentStream || !targetHash.isNullOrBlank()
+
+        if (isThisTorrent || isTargetTorrent) {
+            if (thisHash.isNullOrBlank() || targetHash.isNullOrBlank()) {
+                return false
+            }
+            if (!thisHash.equals(targetHash, ignoreCase = true)) {
+                return false
+            }
+
             val thisFileIdx = fileIdx ?: clientResolve?.fileIdx
             val targetFileIdx = selectedStream.fileIdx ?: selectedStream.clientResolve?.fileIdx
-            if (thisFileIdx != null && targetFileIdx != null) {
-                return thisFileIdx == targetFileIdx
+            if (thisFileIdx != null && targetFileIdx != null && thisFileIdx != targetFileIdx) {
+                return false
             }
+
+            val thisFilename = behaviorHints.filename?.trim()
+            val targetFilename = selectedStream.behaviorHints.filename?.trim()
+            if (!thisFilename.isNullOrBlank() && !targetFilename.isNullOrBlank()) {
+                if (!thisFilename.equals(targetFilename, ignoreCase = true)) return false
+            }
+
+            val thisSize = behaviorHints.videoSize
+            val targetSize = selectedStream.behaviorHints.videoSize
+            if (thisSize != null && targetSize != null && thisSize > 0L && targetSize > 0L) {
+                if (thisSize != targetSize) return false
+            }
+
+            val thisSub = streamSubtitle.normalizedForMatch()
+            val targetSub = selectedStream.streamSubtitle.normalizedForMatch()
+            if (thisSub.isNotBlank() && targetSub.isNotBlank()) {
+                if (!thisSub.equals(targetSub, ignoreCase = true)) return false
+            }
+
             return true
         }
 
-        // 3. Addon ID + Stream metadata match
+        // 3. Filename match
+        val thisFilename = behaviorHints.filename?.trim()
+        val targetFilename = selectedStream.behaviorHints.filename?.trim()
+        if (!thisFilename.isNullOrBlank() && !targetFilename.isNullOrBlank() &&
+            thisFilename.equals(targetFilename, ignoreCase = true)
+        ) {
+            return true
+        }
+
+        // 4. Addon ID + Stream metadata match
         if (addonId == selectedStream.addonId) {
-            val labelMatch = streamLabel.normalizedForMatch().equals(selectedStream.streamLabel.normalizedForMatch(), ignoreCase = true)
-            val subMatch = streamSubtitle.normalizedForMatch().equals(selectedStream.streamSubtitle.normalizedForMatch(), ignoreCase = true)
-            if (labelMatch && subMatch) {
+            val thisNormLabel = streamLabel.normalizedForMatch()
+            val targetNormLabel = selectedStream.streamLabel.normalizedForMatch()
+            val labelMatch = thisNormLabel.equals(targetNormLabel, ignoreCase = true)
+
+            val thisNormSub = streamSubtitle.normalizedForMatch()
+            val targetNormSub = selectedStream.streamSubtitle.normalizedForMatch()
+
+            if (labelMatch && thisNormSub.isNotBlank() && targetNormSub.isNotBlank() &&
+                thisNormSub.equals(targetNormSub, ignoreCase = true)
+            ) {
                 return true
             }
 
-            // Filename match within same addon
-            val thisFilename = behaviorHints.filename?.trim()
-            val targetFilename = selectedStream.behaviorHints.filename?.trim()
-            if (!thisFilename.isNullOrBlank() && thisFilename.equals(targetFilename, ignoreCase = true)) {
-                return true
-            }
-
-            // Size match + label match within same addon
             val thisSize = behaviorHints.videoSize
             val targetSize = selectedStream.behaviorHints.videoSize
             if (labelMatch && thisSize != null && targetSize != null && thisSize == targetSize && thisSize > 0L) {
                 return true
             }
+
+            val thisTitle = title?.normalizedForMatch()
+            val targetTitle = selectedStream.title?.normalizedForMatch()
+            if (!thisTitle.isNullOrBlank() && !targetTitle.isNullOrBlank() &&
+                thisTitle != thisNormLabel &&
+                thisTitle.equals(targetTitle, ignoreCase = true)
+            ) {
+                return true
+            }
         }
 
-        // 4. Cross-addon or resolved stream fallback: Same filename if non-blank
-        val thisFilename = behaviorHints.filename?.trim()
-        val targetFilename = selectedStream.behaviorHints.filename?.trim()
-        if (!thisFilename.isNullOrBlank() && thisFilename.equals(targetFilename, ignoreCase = true)) {
-            return true
+        // 5. Cross-addon: Exact same label & videoSize (if non-zero) and subtitle
+        val thisSize = behaviorHints.videoSize
+        val targetSize = selectedStream.behaviorHints.videoSize
+        if (thisSize != null && targetSize != null && thisSize == targetSize && thisSize > 0L) {
+            val thisNormLabel = streamLabel.normalizedForMatch()
+            val targetNormLabel = selectedStream.streamLabel.normalizedForMatch()
+            val thisNormSub = streamSubtitle.normalizedForMatch()
+            val targetNormSub = selectedStream.streamSubtitle.normalizedForMatch()
+            if (thisNormLabel.equals(targetNormLabel, ignoreCase = true) &&
+                thisNormSub.isNotBlank() && targetNormSub.isNotBlank() &&
+                thisNormSub.equals(targetNormSub, ignoreCase = true)
+            ) {
+                return true
+            }
         }
     }
 
@@ -1199,17 +1290,45 @@ internal fun StreamItem.matchesPlayback(
         val lastUrl = progress.lastSourceUrl?.trim()
         if (!lastUrl.isNullOrBlank()) {
             if (playableDirectUrl == lastUrl || directPlaybackUrl == lastUrl || url == lastUrl) return true
+
             val infoHash = p2pInfoHash
-            if (!infoHash.isNullOrBlank() && lastUrl.contains(infoHash, ignoreCase = true)) return true
+            if (!infoHash.isNullOrBlank() && lastUrl.contains(infoHash, ignoreCase = true)) {
+                val parsedIndex = extractFileIndexFromUrl(lastUrl)
+                val thisFileIdx = fileIdx ?: clientResolve?.fileIdx
+                if (parsedIndex != null && thisFileIdx != null && parsedIndex != thisFileIdx) {
+                    return false
+                }
+                val thisFilename = behaviorHints.filename?.trim()
+                if (!thisFilename.isNullOrBlank() && lastUrl.contains(thisFilename, ignoreCase = true)) {
+                    return true
+                }
+                return true
+            }
+
+            val thisFilename = behaviorHints.filename?.trim()
+            if (!thisFilename.isNullOrBlank() && lastUrl.contains(thisFilename, ignoreCase = true)) return true
         }
+
         val addonMatch = progress.providerAddonId.isNullOrBlank() || addonId == progress.providerAddonId
         if (addonMatch) {
             val progressTitle = progress.lastStreamTitle?.normalizedForMatch()
-            if (!progressTitle.isNullOrBlank() && streamLabel.normalizedForMatch().equals(progressTitle, ignoreCase = true)) {
-                return true
+            if (!progressTitle.isNullOrBlank()) {
+                val thisFilename = behaviorHints.filename?.trim()
+                if (!thisFilename.isNullOrBlank() && thisFilename.equals(progressTitle, ignoreCase = true)) {
+                    return true
+                }
+                val thisSub = streamSubtitle.normalizedForMatch()
+                if (thisSub.isNotBlank() && thisSub.equals(progressTitle, ignoreCase = true)) {
+                    return true
+                }
+                val thisTitle = title?.normalizedForMatch()
+                if (!thisTitle.isNullOrBlank() && thisTitle.equals(progressTitle, ignoreCase = true) && thisTitle != streamLabel.normalizedForMatch()) {
+                    return true
+                }
             }
         }
     }
+
     return false
 }
 
