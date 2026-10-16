@@ -11,6 +11,7 @@ import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.LiveTv
@@ -65,6 +66,8 @@ import nuvio.composeapp.generated.resources.settings_torrserver
 import nuvio.composeapp.generated.resources.settings_torrserver_description
 import nuvio.composeapp.generated.resources.updates_debug_test_description
 import nuvio.composeapp.generated.resources.updates_debug_test_title
+import nuvio.composeapp.generated.resources.party_settings_description
+import nuvio.composeapp.generated.resources.party_title
 import nuvio.composeapp.generated.resources.about_supporters_contributors_subtitle
 import nuvio.composeapp.generated.resources.about_licenses_attributions_subtitle
 import org.jetbrains.compose.resources.stringResource
@@ -88,6 +91,7 @@ internal fun LazyListScope.settingsRootContent(
     onSwitchProfileClick: (() -> Unit)? = null,
     onTorrServerClick: () -> Unit,
     onLiveTvClick: () -> Unit,
+    onWatchPartyClick: (() -> Unit)? = null,
     showAccountSection: Boolean = true,
     showGeneralSection: Boolean = true,
     showAboutSection: Boolean = true,
@@ -118,6 +122,16 @@ internal fun LazyListScope.settingsRootContent(
                         isTablet = isTablet,
                         onClick = onAccountClick,
                     )
+                    if (onWatchPartyClick != null) {
+                        SettingsGroupDivider(isTablet = isTablet)
+                        SettingsNavigationRow(
+                            title = stringResource(Res.string.party_title),
+                            description = stringResource(Res.string.party_settings_description),
+                            icon = Icons.Rounded.Groups,
+                            isTablet = isTablet,
+                            onClick = onWatchPartyClick,
+                        )
+                    }
                     SettingsGroupDivider(isTablet = isTablet)
                     SettingsNavigationRow(
                         title = stringResource(Res.string.compose_settings_page_tracking),

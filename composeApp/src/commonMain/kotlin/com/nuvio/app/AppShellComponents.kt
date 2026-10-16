@@ -111,6 +111,7 @@ internal data class AppTabActions(
     val onCheckForUpdatesClick: (() -> Unit)? = null,
     val onTestUpdateBannerClick: (() -> Unit)? = null,
     val onCollectionsSettingsClick: () -> Unit = {},
+    val onWatchPartySettingsClick: () -> Unit = {},
     val onFolderClick: ((collectionId: String, folderId: String) -> Unit)? = null,
     val onLiveTvChannelClick: (LiveTvChannel) -> Unit = {},
     val onRequestedSettingsPageConsumed: () -> Unit = {},
@@ -206,6 +207,7 @@ internal fun AppTabHost(
                     onCheckForUpdatesClick = actions.onCheckForUpdatesClick,
                     onTestUpdateBannerClick = actions.onTestUpdateBannerClick,
                     onCollectionsClick = actions.onCollectionsSettingsClick,
+                    onWatchPartyClick = actions.onWatchPartySettingsClick,
                 )
             }
         }
