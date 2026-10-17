@@ -54,6 +54,9 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 internal fun TabletStreamsLayout(
     isEpisode: Boolean,
+    showSearchField: Boolean,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
     title: String,
     logo: String?,
     poster: String?,
@@ -209,8 +212,22 @@ internal fun TabletStreamsLayout(
                             modifier = Modifier.padding(bottom = 4.dp),
                         )
 
+                        if (showSearchField) {
+                            StreamSearchField(
+                                query = searchQuery,
+                                onQueryChange = onSearchQueryChange,
+                                modifier = Modifier.padding(bottom = 8.dp),
+                            )
+                        }
+
+                        val listUiState = rememberStreamSearchResult(uiState, searchQuery, showSearchField)
+                        if (listUiState.isEmptyBecauseOfSearch) {
+                            StreamSearchEmptyBlock(modifier = Modifier.weight(1f))
+                            return@Column
+                        }
+
                         StreamList(
-                            uiState = uiState,
+                            uiState = listUiState.uiState,
                             debridEnabled = debridEnabled,
                             appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
                             onStreamSelected = onStreamSelected,

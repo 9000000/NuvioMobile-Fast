@@ -31,16 +31,20 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.SearchOff
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
+import com.nuvio.app.core.ui.NuvioInputField
+import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.features.torrserver.TorrServerConfigRepository
 import com.nuvio.app.features.torrserver.TorrServerRemoteFile
 import com.nuvio.app.features.torrserver.TorrServerService
 import com.nuvio.app.features.torrserver.buildTorrServerMagnet
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +54,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -165,6 +170,7 @@ fun StreamsScreen(
     val streamLinkCopiedText = stringResource(Res.string.streams_link_copied)
     val noDirectStreamLinkText = stringResource(Res.string.streams_no_direct_link)
     var streamActionsTarget by remember(videoId) { mutableStateOf<StreamItem?>(null) }
+    var streamSearchQuery by rememberSaveable(videoId) { mutableStateOf("") }
     var torrentPickerStream by remember(videoId) { mutableStateOf<StreamItem?>(null) }
     var torrentPickerFiles by remember(videoId) { mutableStateOf<List<TorrServerRemoteFile>>(emptyList()) }
     var isTorrentPickerLoading by remember(videoId) { mutableStateOf(false) }
@@ -361,6 +367,9 @@ fun StreamsScreen(
         if (isTabletLayout) {
             TabletStreamsLayout(
                 isEpisode = isEpisode,
+                showSearchField = streamDisplaySettings.showStreamSearch,
+                searchQuery = streamSearchQuery,
+                onSearchQueryChange = { streamSearchQuery = it },
                 title = title,
                 logo = logo,
                 poster = poster,
@@ -383,6 +392,9 @@ fun StreamsScreen(
         } else {
             MobileStreamsLayout(
                 isEpisode = isEpisode,
+                showSearchField = streamDisplaySettings.showStreamSearch,
+                searchQuery = streamSearchQuery,
+                onSearchQueryChange = { streamSearchQuery = it },
                 backgroundMode = streamDisplaySettings.backgroundMode,
                 title = title,
                 logo = logo,
@@ -579,6 +591,9 @@ fun StreamsScreen(
 @Composable
 private fun MobileStreamsLayout(
     isEpisode: Boolean,
+    showSearchField: Boolean,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
     backgroundMode: StreamBackgroundMode,
     title: String,
     logo: String?,
@@ -673,8 +688,22 @@ private fun MobileStreamsLayout(
                         onRefresh = onRefresh,
                     )
 
+                    if (showSearchField) {
+                        StreamSearchField(
+                            query = searchQuery,
+                            onQueryChange = onSearchQueryChange,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        )
+                    }
+
+                    val listUiState = rememberStreamSearchResult(uiState, searchQuery, showSearchField)
+                    if (listUiState.isEmptyBecauseOfSearch) {
+                        StreamSearchEmptyBlock(modifier = Modifier.weight(1f))
+                        return@Column
+                    }
+
                     StreamList(
-                        uiState = uiState,
+                        uiState = listUiState.uiState,
                         debridEnabled = debridEnabled,
                         appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
                         onStreamSelected = onStreamSelected,
@@ -1651,6 +1680,83 @@ private fun FooterLoadingBlock(
                 fontWeight = FontWeight.Medium,
             ),
             color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+internal data class StreamSearchResult(
+    val uiState: StreamsUiState,
+    val isEmptyBecauseOfSearch: Boolean,
+)
+
+@Composable
+internal fun rememberStreamSearchResult(
+    uiState: StreamsUiState,
+    query: String,
+    enabled: Boolean,
+): StreamSearchResult = remember(uiState, query, enabled) {
+    val terms = if (enabled) query.trim().lowercase().split(' ').filter { it.isNotEmpty() } else emptyList()
+    if (terms.isEmpty()) return@remember StreamSearchResult(uiState, isEmptyBecauseOfSearch = false)
+    val groups = uiState.groups.map { group ->
+        group.copy(streams = group.streams.filter { it.matchesSearchTerms(terms) })
+    }
+    val filtered = uiState.copy(groups = groups)
+    StreamSearchResult(
+        uiState = filtered,
+        isEmptyBecauseOfSearch = uiState.hasAnyStreams && !filtered.hasAnyStreams,
+    )
+}
+
+private fun StreamItem.matchesSearchTerms(terms: List<String>): Boolean {
+    val haystack = buildString {
+        name?.let { append(it).append(' ') }
+        title?.let { append(it).append(' ') }
+        description?.let { append(it).append(' ') }
+        sourceName?.let { append(it).append(' ') }
+        append(addonName).append(' ')
+        behaviorHints.filename?.let { append(it).append(' ') }
+        badges.forEach { badge -> append(badge.name).append(' ') }
+    }.lowercase()
+    return terms.all { haystack.contains(it) }
+}
+
+@Composable
+internal fun StreamSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    NuvioInputField(
+        value = query,
+        onValueChange = onQueryChange,
+        placeholder = stringResource(Res.string.streams_search_placeholder),
+        modifier = modifier,
+        trailingContent = if (query.isEmpty()) null else {
+            {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = stringResource(Res.string.streams_search_clear),
+                        tint = MaterialTheme.nuvio.colors.textMuted,
+                    )
+                }
+            }
+        },
+    )
+}
+
+@Composable
+internal fun StreamSearchEmptyBlock(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = stringResource(Res.string.streams_search_no_results),
+            color = MaterialTheme.nuvio.colors.textMuted,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(24.dp),
         )
     }
 }
