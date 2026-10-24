@@ -75,6 +75,7 @@ import com.nuvio.app.core.ui.accentBrush
 import com.nuvio.app.core.ui.appIconPainter
 import com.nuvio.app.core.ui.gradientMask
 import com.nuvio.app.core.ui.nuvioTypeScale
+import com.nuvio.app.features.streams.StreamBadge
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import com.nuvio.app.core.i18n.localizedEpisodeTitle
@@ -96,6 +97,7 @@ internal fun PlayerControlsShell(
     showRemainingTime: Boolean = false,
     onRuntimeClick: () -> Unit = {},
     releaseInfo: String? = null,
+    badges: List<StreamBadge> = emptyList(),
     hideDetails: Boolean = false,
     onNextEpisodeClick: (() -> Unit)? = null,
     onInteraction: () -> Unit = {},
@@ -209,6 +211,7 @@ internal fun PlayerControlsShell(
                         onBack = onBack,
                         onPartyClick = onPartyClick,
                         partyActive = partyActive,
+                        onSwitchEngineClick = onSwitchEngineClick,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .windowInsetsPadding(WindowInsets.safeContent.only(WindowInsetsSides.Top))
@@ -288,10 +291,8 @@ internal fun PlayerControlsShell(
                             episodeNumber = episodeNumber,
                             episodeTitle = episodeTitle,
                             releaseInfo = releaseInfo,
-                            streamTitle = streamTitle,
-                            providerName = providerName,
-                            isPlaying = playbackSnapshot.isPlaying,
                             metrics = metrics,
+                            badges = badges,
                         )
                     }
                     PlayerTimeline(
@@ -315,7 +316,6 @@ internal fun PlayerControlsShell(
                         onSourcesClick = onSourcesClick,
                         onEpisodesClick = onEpisodesClick,
                         onNextEpisodeClick = onNextEpisodeClick,
-                        onSwitchEngineClick = onSwitchEngineClick,
                         onSpeedClick = onSpeedClick,
                         onResizeModeClick = onResizeModeClick,
                         onVideoSettingsClick = onVideoSettingsClick,
@@ -731,6 +731,8 @@ internal fun PlayerSeekBar(
 ) {
     val seekDurationMs = durationMs.coerceAtLeast(1L)
     val seekDescription = stringResource(Res.string.player_seek_position)
+    val seekState = remember(seekDurationMs) { SliderState(trackRange = 0f..seekDurationMs.toFloat()) }
+    seekState.value = displayedPositionMs.coerceIn(0L, seekDurationMs).toFloat()
     Column(modifier = modifier) {
         Slider(
             modifier = Modifier
@@ -738,11 +740,10 @@ internal fun PlayerSeekBar(
                 .height(metrics.sliderTouchHeight)
                 .graphicsLayer(scaleY = metrics.sliderScaleY)
                 .semantics { contentDescription = seekDescription },
-            value = displayedPositionMs.coerceIn(0L, seekDurationMs).toFloat(),
+            state = seekState,
             onValueChange = { value -> onScrubChange(value.toLong()) },
             onValueChangeFinished = { onScrubFinished(displayedPositionMs.coerceIn(0L, seekDurationMs)) },
             enabled = durationMs > 0L,
-            valueRange = 0f..seekDurationMs.toFloat(),
             track = { sliderState -> PlayerProgressTrack(sliderState) },
         )
         Row(

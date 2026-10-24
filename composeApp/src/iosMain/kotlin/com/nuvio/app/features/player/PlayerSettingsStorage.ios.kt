@@ -1023,6 +1023,10 @@ private const val subtitleCustomFontNameKey = "subtitle_custom_font_name"
 
     actual fun saveLibassRenderType(renderType: String) {}
 
+    actual fun loadLibassRenderScale(): String? = null
+
+    actual fun saveLibassRenderScale(scale: String) {}
+
     actual fun loadIosVideoOutputPreset(): String? =
         NSUserDefaults.standardUserDefaults.stringForKey(ProfileScopedKey.of(iosVideoOutputPresetKey))
 
