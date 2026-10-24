@@ -2,6 +2,7 @@ package com.nuvio.app.features.details
 
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.streams.StreamItem
+import kotlinx.serialization.Serializable
 
 data class MetaDetails(
     val id: String,
@@ -48,6 +49,7 @@ enum class MoreLikeThisSource {
     SIMKL,
 }
 
+@Serializable
 data class MetaExternalRating(
     val source: String,
     val value: Double,
