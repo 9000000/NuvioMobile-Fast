@@ -135,16 +135,6 @@ fun SubtitleModal(
     val selectedOptionId = pendingOptionId ?: playbackOptionId
     val languageListState = rememberLazyListState()
     val optionsListState = rememberLazyListState()
-    val fontPickerLauncher = rememberFontPickerLauncher { name, path ->
-        onStyleChanged(
-            subtitleStyle.copy(
-                fontName = "Custom",
-                customFontPath = path,
-                customFontName = name,
-            ),
-        )
-    }
-
     val subtitleFilePickerLauncher = rememberSubtitleFilePickerLauncher { name, fileUri ->
         val localSubtitle = AddonSubtitle(
             id = "local_${fileUri.hashCode()}_${WatchProgressClock.nowEpochMs()}",
@@ -339,7 +329,6 @@ fun SubtitleModal(
                                     onAutoSyncCapture = onAutoSyncCapture,
                                     onAutoSyncCueSelected = onAutoSyncCueSelected,
                                     onAutoSyncReload = onAutoSyncReload,
-                                    onPickCustomFont = fontPickerLauncher,
                                 )
                             }
                         }
