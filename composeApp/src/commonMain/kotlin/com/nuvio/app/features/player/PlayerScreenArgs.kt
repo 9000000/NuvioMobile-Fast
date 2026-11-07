@@ -42,6 +42,7 @@ internal data class PlayerScreenArgs(
     val contentLanguage: String? = null,
     val drmType: String? = null,
     val drmKey: String? = null,
+    val subtitleExtras: SubtitleRequestExtras? = null,
     val launchId: Long? = null,
     val sourceFilename: String? = null,
     val onOpenPartyMedia: (PartyMedia) -> Unit = {},
