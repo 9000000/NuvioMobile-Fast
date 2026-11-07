@@ -245,26 +245,15 @@ def upload_via_api(token, tag, title, notes, apks, is_prerelease=False):
                 release_data = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             err_msg = e.read().decode("utf-8", errors="replace")
-            # Kiem tra chi tiet loi HTTP 422 tu GitHub API
+            # Fallback neu tag da ton tai (HTTP 422)
             if e.code == 422:
-                if "target_commitish" in err_msg:
-                    print(f"[ERROR] Nhanh '{target_branch}' chua ton tai tren GitHub remote ({canonical_repo})!")
-                    print(f"        -> Vui long chay: git push -u origin {target_branch}")
-                    print(f"        -> Hoac merge vao nhanh 'main' truoc khi tao Release.")
-                    return False
-
-                if "already_exists" in err_msg:
-                    print(f"   [INFO] Tag {tag} da ton tai tren GitHub, dang lay thong tin release...")
-                    try:
-                        get_req = urllib.request.Request(get_tag_url, headers=headers, method="GET")
-                        with urllib.request.urlopen(get_req) as get_resp:
-                            release_data = json.loads(get_resp.read().decode("utf-8"))
-                    except Exception as get_err:
-                        print(f"[ERROR] Tag {tag} da ton tai nhung khong the lay Release tuong ung: {get_err}")
-                        print(f"        -> Neu day la tag chua co Release, ban hay xoa tag tren GitHub hoac tao Release thu cong.")
-                        return False
-                else:
-                    print(f"[ERROR] Loi xac thuc du lieu GitHub API (HTTP 422): {err_msg}")
+                print(f"   [INFO] Tag {tag} da ton tai tren GitHub, dang lay thong tin release...")
+                try:
+                    get_req = urllib.request.Request(get_tag_url, headers=headers, method="GET")
+                    with urllib.request.urlopen(get_req) as get_resp:
+                        release_data = json.loads(get_resp.read().decode("utf-8"))
+                except Exception as get_err:
+                    print(f"[ERROR] Khong the lay thong tin release {tag}: {get_err}")
                     return False
             else:
                 print(f"[ERROR] Loi tao release qua GitHub API: HTTP {e.code} - {err_msg}")
