@@ -78,22 +78,61 @@ internal object PlayerPlaybackNetworking {
     ): DataSource.Factory {
         val requestHeaders = sanitizeHeaders(defaultHeaders)
         val baseClient = if (useLongReadTimeout) loopbackPlaybackHttpClient else playbackHttpClient
-        val client = requestHeaders.headerValue("Authorization")?.let { authorization ->
+
+        val authValue = requestHeaders.headerValue("Authorization")
+        val refererValue = requestHeaders.headerValue("Referer")
+        val userAgentValue = requestHeaders.headerValue("User-Agent")
+        val originValue = requestHeaders.headerValue("Origin")
+
+        val customHeaders = requestHeaders.filterKeys { key ->
+            !key.equals("Authorization", ignoreCase = true) &&
+                !key.equals("Referer", ignoreCase = true) &&
+                !key.equals("User-Agent", ignoreCase = true) &&
+                !key.equals("Origin", ignoreCase = true) &&
+                !key.equals("Range", ignoreCase = true) &&
+                !key.equals("Host", ignoreCase = true)
+        }
+
+        val client = if (authValue != null || refererValue != null || userAgentValue != null || originValue != null || customHeaders.isNotEmpty()) {
             baseClient.newBuilder()
                 .addNetworkInterceptor { chain ->
                     val request = chain.request()
-                    if (request.header("Authorization") == null) {
-                        chain.proceed(
-                            request.newBuilder()
-                                .header("Authorization", authorization)
-                                .build()
-                        )
+                    var modified = false
+                    val reqBuilder = request.newBuilder()
+
+                    if (authValue != null && request.header("Authorization") == null) {
+                        reqBuilder.header("Authorization", authValue)
+                        modified = true
+                    }
+                    if (refererValue != null && request.header("Referer") == null) {
+                        reqBuilder.header("Referer", refererValue)
+                        modified = true
+                    }
+                    if (userAgentValue != null && request.header("User-Agent") == null) {
+                        reqBuilder.header("User-Agent", userAgentValue)
+                        modified = true
+                    }
+                    if (originValue != null && request.header("Origin") == null) {
+                        reqBuilder.header("Origin", originValue)
+                        modified = true
+                    }
+                    customHeaders.forEach { (k, v) ->
+                        if (request.header(k) == null) {
+                            reqBuilder.header(k, v)
+                            modified = true
+                        }
+                    }
+
+                    if (modified) {
+                        chain.proceed(reqBuilder.build())
                     } else {
                         chain.proceed(request)
                     }
                 }
                 .build()
-        } ?: baseClient
+        } else {
+            baseClient
+        }
 
         return OkHttpDataSource.Factory(client).apply {
             setDefaultRequestProperties(requestHeaders)
