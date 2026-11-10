@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="settings_playback_subtitle_auto_sync">Tự động đồng bộ phụ đề</string>
-    <string name="settings_playback_subtitle_auto_sync_description">Tự động đồng bộ phụ đề add-on ưa thích khi bắt đầu phát. Yêu cầu chọn ngôn ngữ phụ đề ưu tiên.</string>
+    <string name="settings_playback_subtitle_auto_sync_description">Khớp phụ đề từ tiện ích đã chọn với thời gian của phụ đề nhúng sẵn trong video.</string>
     <string name="settings_playback_auto_sync_mode_aggressive">Tìm kiếm đồng bộ: Kỹ lưỡng</string>
     <string name="settings_playback_auto_sync_mode_aggressive_description">Liên tục so sánh các phụ đề khác và track tích hợp để tìm khớp chính xác nhất trước khi áp dụng. Chỉ áp dụng khi độ tin cậy cao.</string>
     <string name="settings_playback_auto_sync_mode_passive">Tìm kiếm đồng bộ: Nhanh</string>

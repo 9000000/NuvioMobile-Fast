@@ -155,8 +155,7 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         clearChapterSkipState()
         episodeStreamsPanelState = EpisodeStreamsPanelState()
         PlayerStreamsRepository.clearEpisodeStreams()
-        SubtitleRepository.clear()
-        autoFetchedAddonSubtitlesForKey = null
+        resetAddonSubtitlesIfSourceChanged()
         WatchProgressRepository.ensureLoaded()
     }
 
