@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContent
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,6 +36,7 @@ import androidx.compose.material.icons.rounded.Forward10
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Replay10
+import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.Tv
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import androidx.compose.material3.Icon
@@ -114,6 +117,8 @@ internal fun PlayerControlsShell(
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
     onResizeModeClick: () -> Unit,
+    isPortraitOrientation: Boolean = false,
+    onToggleOrientationClick: (() -> Unit)? = null,
     onSpeedClick: () -> Unit,
     onSubtitleClick: () -> Unit,
     onAudioClick: () -> Unit,
@@ -169,6 +174,8 @@ internal fun PlayerControlsShell(
             chapters = chapters,
             onSpeedClick = onSpeedClick,
             onResizeModeClick = onResizeModeClick,
+            isPortraitOrientation = isPortraitOrientation,
+            onToggleOrientationClick = onToggleOrientationClick,
             onVideoSettingsClick = onVideoSettingsClick,
             onOpenInExternalPlayer = onOpenInExternalPlayer,
             onStreamInfoClick = onStreamInfoClick,
@@ -315,6 +322,8 @@ internal fun PlayerControlsShell(
                     onScrubChange = onScrubChange,
                     onScrubFinished = onScrubFinished,
                     onResizeModeClick = onResizeModeClick,
+                    isPortraitOrientation = isPortraitOrientation,
+                    onToggleOrientationClick = onToggleOrientationClick,
                     onSpeedClick = onSpeedClick,
                     onSubtitleClick = onSubtitleClick,
                     onAudioClick = onAudioClick,
@@ -372,10 +381,13 @@ internal fun PlayerControlsShell(
                         onAudioClick = onAudioClick,
                         onSourcesClick = onSourcesClick,
                         onEpisodesClick = onEpisodesClick,
+                        onLiveChannelsClick = onLiveChannelsClick,
                         onChaptersClick = onChaptersClick,
                         onNextEpisodeClick = onNextEpisodeClick,
                         onSpeedClick = onSpeedClick,
                         onResizeModeClick = onResizeModeClick,
+                        isPortraitOrientation = isPortraitOrientation,
+                        onToggleOrientationClick = onToggleOrientationClick,
                         onVideoSettingsClick = onVideoSettingsClick,
                         onOpenInExternalPlayer = onOpenInExternalPlayer,
                         onStreamInfoClick = onStreamInfoClick,
@@ -691,6 +703,8 @@ private fun ProgressControls(
     onScrubChange: (Long) -> Unit,
     onScrubFinished: (Long) -> Unit,
     onResizeModeClick: () -> Unit,
+    isPortraitOrientation: Boolean = false,
+    onToggleOrientationClick: (() -> Unit)? = null,
     onSpeedClick: () -> Unit,
     onSubtitleClick: () -> Unit,
     onAudioClick: () -> Unit,
@@ -735,7 +749,9 @@ private fun ProgressControls(
                 ),
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                    modifier = Modifier
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -744,6 +760,15 @@ private fun ProgressControls(
                         painter = aspectRatioPainter,
                         onClick = onResizeModeClick,
                     )
+                    if (onToggleOrientationClick != null) {
+                        PlayerActionPillButton(
+                            label = stringResource(
+                                if (isPortraitOrientation) Res.string.compose_player_rotate_landscape else Res.string.compose_player_rotate_portrait,
+                            ),
+                            icon = Icons.Rounded.ScreenRotation,
+                            onClick = onToggleOrientationClick,
+                        )
+                    }
                     PlayerActionPillButton(
                         label = formatPlaybackSpeedLabel(playbackSnapshot.playbackSpeed),
                         icon = Icons.Filled.Speed,

@@ -439,6 +439,8 @@ private fun PlayerScreenRuntime.RenderPlayerControls(
             onSeekBack = { seekBy(-10_000L) },
             onSeekForward = { seekBy(10_000L) },
             onResizeModeClick = { cycleResizeMode() },
+            isPortraitOrientation = isPortraitOrientation,
+            onToggleOrientationClick = { isPortraitOrientation = !isPortraitOrientation },
             onSpeedClick = {
                 if (!isLiveTvPlayback) {
                     cyclePlaybackSpeed()

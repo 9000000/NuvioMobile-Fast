@@ -2,6 +2,7 @@ package com.nuvio.app.features.player
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.IntSize
@@ -17,6 +18,7 @@ import platform.UIKit.UIScreen
 import platform.UIKit.UISlider
 
 private const val lockPlayerToLandscapeNotification = "NuvioPlayerLockLandscape"
+private const val lockPlayerToPortraitNotification = "NuvioPlayerLockPortrait"
 private const val unlockPlayerOrientationNotification = "NuvioPlayerUnlockOrientation"
 private var playerLandscapeLockCount = 0
 
@@ -39,6 +41,18 @@ actual fun LockPlayerToLandscape() {
                     null,
                 )
             }
+        }
+    }
+}
+
+@Composable
+actual fun ApplyPlayerOrientation(isPortrait: Boolean) {
+    LaunchedEffect(isPortrait) {
+        if (playerLandscapeLockCount > 0) {
+            NSNotificationCenter.defaultCenter.postNotificationName(
+                if (isPortrait) lockPlayerToPortraitNotification else lockPlayerToLandscapeNotification,
+                null,
+            )
         }
     }
 }

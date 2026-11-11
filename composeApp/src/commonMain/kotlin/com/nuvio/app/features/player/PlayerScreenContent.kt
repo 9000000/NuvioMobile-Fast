@@ -197,6 +197,7 @@ internal fun PlayerScreenContent(args: PlayerScreenArgs) {
         }
         runtime.resetIdentityStateIfNeeded()
 
+        ApplyPlayerOrientation(isPortrait = runtime.isPortraitOrientation)
         EnterImmersivePlayerMode(keepScreenAwake = keepScreenAwake)
         ManagePlayerPictureInPicture(
             isPlaying = isPlaying,

@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.Toc
 import androidx.compose.material.icons.rounded.Build
@@ -24,20 +22,17 @@ import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
+import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.SwapHoriz
+import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -113,10 +108,13 @@ internal fun PlayerControlActions(
     onAudioClick: () -> Unit,
     onSourcesClick: (() -> Unit)?,
     onEpisodesClick: (() -> Unit)?,
+    onLiveChannelsClick: (() -> Unit)? = null,
     onChaptersClick: (() -> Unit)?,
     onNextEpisodeClick: (() -> Unit)?,
     onSpeedClick: () -> Unit,
     onResizeModeClick: () -> Unit,
+    isPortraitOrientation: Boolean = false,
+    onToggleOrientationClick: (() -> Unit)? = null,
     onVideoSettingsClick: (() -> Unit)?,
     onOpenInExternalPlayer: (() -> Unit)?,
     onStreamInfoClick: () -> Unit,
@@ -130,22 +128,20 @@ internal fun PlayerControlActions(
         onAudioClick = onAudioClick,
         onSourcesClick = onSourcesClick,
         onEpisodesClick = onEpisodesClick,
+        onLiveChannelsClick = onLiveChannelsClick,
         onChaptersClick = onChaptersClick,
         onNextEpisodeClick = onNextEpisodeClick,
         onSpeedClick = onSpeedClick,
         onResizeModeClick = onResizeModeClick,
+        isPortraitOrientation = isPortraitOrientation,
+        onToggleOrientationClick = onToggleOrientationClick,
         onVideoSettingsClick = onVideoSettingsClick,
         onOpenInExternalPlayer = onOpenInExternalPlayer,
         onStreamInfoClick = onStreamInfoClick,
         onSubmitIntroClick = onSubmitIntroClick,
     )
-    val hasOverflow = actions.size > 5
-    var expanded by remember(hasOverflow) { mutableStateOf(false) }
     val scrollState = rememberScrollState()
     val startOffset = if (onNextEpisodeClick != null) (-13).dp else (-12).dp
-    LaunchedEffect(expanded, scrollState.maxValue) {
-        if (expanded) scrollState.animateScrollTo(scrollState.maxValue) else scrollState.scrollTo(0)
-    }
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = PlayerTimelineContentInset),
@@ -156,7 +152,7 @@ internal fun PlayerControlActions(
                 modifier = Modifier.weight(1f).offset(x = startOffset).horizontalScroll(scrollState),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                actions.take(if (expanded) actions.size else 5).forEach { action ->
+                actions.forEach { action ->
                     PlayerAction(
                         description = action.description,
                         onClick = {
@@ -166,18 +162,6 @@ internal fun PlayerControlActions(
                         icon = action.icon,
                         painter = action.painter,
                         iconSize = action.iconSize,
-                    )
-                }
-                if (hasOverflow) {
-                    PlayerAction(
-                        description = stringResource(
-                            if (expanded) Res.string.compose_player_fewer_actions else Res.string.compose_player_more_actions,
-                        ),
-                        onClick = {
-                            expanded = !expanded
-                            onInteraction()
-                        },
-                        icon = if (expanded) Icons.AutoMirrored.Rounded.KeyboardArrowLeft else Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                     )
                 }
             }
@@ -231,10 +215,13 @@ internal fun playerControlActions(
     onAudioClick: () -> Unit,
     onSourcesClick: (() -> Unit)?,
     onEpisodesClick: (() -> Unit)?,
+    onLiveChannelsClick: (() -> Unit)? = null,
     onChaptersClick: (() -> Unit)?,
     onNextEpisodeClick: (() -> Unit)?,
     onSpeedClick: () -> Unit,
     onResizeModeClick: () -> Unit,
+    isPortraitOrientation: Boolean = false,
+    onToggleOrientationClick: (() -> Unit)? = null,
     onVideoSettingsClick: (() -> Unit)?,
     onOpenInExternalPlayer: (() -> Unit)?,
     onStreamInfoClick: () -> Unit,
@@ -273,6 +260,12 @@ internal fun playerControlActions(
                 painter = appIconPainter(AppIconResource.PlayerEpisodes),
             )
         },
+        onLiveChannelsClick?.let {
+            PlayerControlAction(
+                stringResource(Res.string.compose_player_channels), it,
+                icon = Icons.Rounded.Tv,
+            )
+        },
         PlayerControlAction(
             "${stringResource(Res.string.compose_player_speed)} ${formatPlaybackSpeedLabel(playbackSnapshot.playbackSpeed)}",
             onSpeedClick, icon = Icons.Rounded.Speed,
@@ -281,6 +274,15 @@ internal fun playerControlActions(
             stringResource(resizeMode.labelRes), onResizeModeClick,
             painter = appIconPainter(AppIconResource.PlayerAspectRatio),
         ),
+        onToggleOrientationClick?.let {
+            PlayerControlAction(
+                stringResource(
+                    if (isPortraitOrientation) Res.string.compose_player_rotate_landscape else Res.string.compose_player_rotate_portrait,
+                ),
+                it,
+                icon = Icons.Rounded.ScreenRotation,
+            )
+        },
         onOpenInExternalPlayer?.let {
             PlayerControlAction(
                 stringResource(Res.string.streams_open_external_player), it,

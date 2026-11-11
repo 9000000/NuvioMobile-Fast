@@ -3,6 +3,7 @@ import UserNotifications
 import ComposeApp
 
 private let lockPlayerToLandscapeNotification = Notification.Name("NuvioPlayerLockLandscape")
+private let lockPlayerToPortraitNotification = Notification.Name("NuvioPlayerLockPortrait")
 private let unlockPlayerOrientationNotification = Notification.Name("NuvioPlayerUnlockOrientation")
 
 final class OrientationLockAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
@@ -76,6 +77,11 @@ final class OrientationLockCoordinator {
             }
         )
         observers.append(
+            center.addObserver(forName: lockPlayerToPortraitNotification, object: nil, queue: .main) { [weak self] _ in
+                self?.setPortraitLock()
+            }
+        )
+        observers.append(
             center.addObserver(forName: unlockPlayerOrientationNotification, object: nil, queue: .main) { [weak self] _ in
                 self?.setLandscapeLock(enabled: false)
             }
@@ -86,6 +92,11 @@ final class OrientationLockCoordinator {
         let nextOrientations: UIInterfaceOrientationMask = enabled ? .landscape : .allButUpsideDown
         supportedOrientations = nextOrientations
         requestOrientationUpdate(for: nextOrientations, forceRotate: enabled)
+    }
+
+    private func setPortraitLock() {
+        supportedOrientations = .portrait
+        requestOrientationUpdate(for: .portrait, forceRotate: true)
     }
 
     private func requestOrientationUpdate(for mask: UIInterfaceOrientationMask, forceRotate: Bool) {

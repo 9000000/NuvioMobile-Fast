@@ -11,6 +11,7 @@ import android.provider.Settings
 import android.view.WindowManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +41,23 @@ actual fun LockPlayerToLandscape() {
 
         onDispose {
             activity.requestedOrientation = previousOrientation
+        }
+    }
+}
+
+@Composable
+actual fun ApplyPlayerOrientation(isPortrait: Boolean) {
+    val activity = LocalContext.current.findActivity() ?: return
+    if (!activity.shouldForceLandscapePlayer()) return
+
+    LaunchedEffect(activity, isPortrait) {
+        val targetOrientation = if (isPortrait) {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+        if (activity.requestedOrientation != targetOrientation) {
+            activity.requestedOrientation = targetOrientation
         }
     }
 }
