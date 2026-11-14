@@ -750,6 +750,7 @@ private fun MobileSettingsScreen(
                     blurNextUp = continueWatchingPreferencesUiState.blurNextUp,
                     showResumePromptOnLaunch = continueWatchingPreferencesUiState.showResumePromptOnLaunch,
                     sortMode = continueWatchingPreferencesUiState.sortMode,
+                    clickAction = continueWatchingPreferencesUiState.clickAction,
                 )
                 SettingsPage.PosterCustomization -> posterCustomizationSettingsContent(
                     isTablet = false,
@@ -1203,6 +1204,7 @@ private fun TabletSettingsScreen(
                         blurNextUp = continueWatchingPreferencesUiState.blurNextUp,
                         showResumePromptOnLaunch = continueWatchingPreferencesUiState.showResumePromptOnLaunch,
                         sortMode = continueWatchingPreferencesUiState.sortMode,
+                        clickAction = continueWatchingPreferencesUiState.clickAction,
                     )
                     SettingsPage.PosterCustomization -> posterCustomizationSettingsContent(
                         isTablet = true,

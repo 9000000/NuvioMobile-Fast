@@ -1177,7 +1177,7 @@
     <string name="settings_playback_secondary_subtitle_language">Ngôn ngữ ưu tiên thứ hai</string>
     <string name="settings_playback_section_decoder">BỘ GIẢI MÃ</string>
     <string name="settings_playback_engine">Lõi trình phát</string>
-    <string name="settings_playback_engine_auto_description">Dùng ExoPlayer trước và chuyển sang libmpv nếu phát lại thất bại</string>
+    <string name="settings_playback_engine_auto_description">ExoPlayer cho Phim &amp; Chương trình TV · MPV cho Anime</string>
     <string name="settings_playback_engine_exoplayer_description">Dùng ExoPlayer với bộ giải mã Android Media3</string>
     <string name="settings_playback_engine_libmpv_description">Dùng libmpv để phát lại trên Android</string>
     <string name="settings_playback_auto_switch_engine_on_error">Tự động chuyển lõi trình phát khi phát lại lỗi</string>
@@ -1274,7 +1274,7 @@
     <string name="settings_playback_vod_cache_size_value">%1$d MB</string>
     <string name="settings_playback_vod_cache_warning">Ghi đĩa vẫn tiếp tục khi phát luồng đã đệm. Dung lượng mới sẽ áp dụng từ lần khởi động ứng dụng tiếp theo.</string>
     <string name="settings_playback_exo_chapters">Hiển thị chương</string>
-    <string name="settings_playback_exo_chapters_description">Đọc các chương của tệp MKV để đánh dấu trên thanh tiến trình và chuyển đổi qua lại giữa chúng. Thực hiện thêm một vài yêu cầu nhỏ khi bắt đầu phát lại. libmpv luôn hiển thị các chương.</string>
+    <string name="settings_playback_exo_chapters_description">Đọc các chương của tệp MKV để đánh dấu trên thanh tiến trình và chuyển đổi qua lại giữa chúng.</string>
     <string name="settings_playback_remember_audio_delay">Ghi nhớ độ trễ âm thanh cho từng thiết bị</string>
     <string name="settings_playback_remember_audio_delay_description">Khôi phục độ trễ âm thanh đã đặt trong trình phát mỗi khi cùng đầu ra được sử dụng lại, ví dụ như loa điện thoại, tai nghe có dây hoặc từng thiết bị Bluetooth</string>
     <string name="settings_playback_downmix_section">Hạ kênh âm thanh</string>
@@ -2672,4 +2672,28 @@
     <string name="subtitle_shadow_opacity">Độ mờ bóng</string>
     <string name="subtitle_shadow_size">Kích thước bóng</string>
     <string name="subtitle_reset_appearance">Đặt lại giao diện</string>
+    <string name="settings_continue_watching_click_action_title">Khi chọn</string>
+    <string name="settings_continue_watching_click_action_description">Nội dung mở ra khi bạn chọn một mục Tiếp tục xem</string>
+    <string name="settings_continue_watching_click_action_stream">Mở luồng phát</string>
+    <string name="settings_continue_watching_click_action_stream_desc">Chọn một nguồn phát hoặc tiếp tục phát lại</string>
+    <string name="settings_continue_watching_click_action_details">Mở chi tiết</string>
+    <string name="settings_continue_watching_click_action_details_desc">Mở trang thông tin chi tiết của tiêu đề</string>
+    <string name="settings_continue_watching_click_action_details_upcoming">Chỉ chi tiết cho tập sắp chiếu</string>
+    <string name="settings_continue_watching_click_action_details_upcoming_desc">Mở chi tiết cho các tập chưa phát sóng, mở luồng phát cho các tập còn lại</string>
+    <string name="settings_playback_auto_switch_engine_blocked_by_fallback">Tắt tính năng tự chuyển nguồn dự phòng khi lỗi để sử dụng tính năng này.</string>
+    <string name="settings_playback_fallback_next_source">Tự chuyển sang nguồn phù hợp tiếp theo khi lỗi</string>
+    <string name="settings_playback_fallback_next_source_description">Nếu nguồn tự động chọn bị lỗi hoặc không khởi động kịp thời, sẽ âm thầm thử các nguồn phù hợp tiếp theo.</string>
+    <string name="settings_playback_fallback_max_sources">Số nguồn thử lại khi lỗi</string>
+    <string name="settings_playback_fallback_startup_timeout">Thời gian chờ nguồn khởi động</string>
+    <string name="settings_playback_fallback_next_source_blocked_by_engine_switch">Tắt tính năng tự chuyển lõi trình phát khi lỗi để sử dụng tính năng này.</string>
+    <string name="player_error_source_startup_timeout">Nguồn phát không khởi động trong vòng %1$d giây.</string>
+    <string name="settings_playback_chapter_title">Hiển thị tiêu đề chương</string>
+    <string name="settings_playback_chapter_title_description">Hiển thị tên chương hiện tại phía trên thanh tiến trình.</string>
+    <string name="player_error_stream_expired">Liên kết luồng đã hết hạn. Vui lòng thử một nguồn khác.</string>
+    <string name="player_error_stream_removed">Liên kết luồng đã hết hạn hoặc bị xóa. Vui lòng thử một nguồn khác.</string>
+    <string name="player_error_stream_rate_limited">Quá nhiều yêu cầu đến nguồn phát. Vui lòng thử lại sau.</string>
+    <string name="player_error_stream_unavailable">Máy chủ nguồn phát hiện không khả dụng. Vui lòng thử một nguồn khác.</string>
+    <string name="player_error_stream_blocked">Nguồn phát bị chặn hoặc bị hạn chế. Vui lòng thử một nguồn khác.</string>
+    <string name="player_error_source_invalid_content">Lỗi nguồn: Nguồn phát trả về nội dung không hợp lệ hoặc không thể phát. Liên kết có thể đã hết hạn hoặc máy chủ đã trả về trang lỗi thay vì video.\n\nVui lòng thử một nguồn khác. [%1$s]</string>
+    <string name="player_error_unsupported_format">Luồng phát này sử dụng định dạng mà thiết bị của bạn có thể không hỗ trợ. Vui lòng thử một nguồn khác. [%1$s]</string>
 </resources>
