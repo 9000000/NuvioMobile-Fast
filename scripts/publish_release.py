@@ -173,7 +173,7 @@ def get_canonical_repo_url(token):
             headers={
                 "Authorization": f"Bearer {token}",
                 "Accept": "application/vnd.github+json",
-                "User-Agent": "NuvioMobileFast-Release-Script"
+                "User-Agent": "NuvioMobile-Fast-Release-Script"
             }
         )
         with urllib.request.urlopen(req) as resp:
@@ -190,7 +190,7 @@ def upload_via_api(token, tag, title, notes, apks, is_prerelease=False):
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
-        "User-Agent": "NuvioMobileFast-Release-Script",
+        "User-Agent": "NuvioMobile-Fast-Release-Script",
         "Content-Type": "application/json",
     }
 
@@ -282,7 +282,7 @@ def upload_via_api(token, tag, title, notes, apks, is_prerelease=False):
             del_headers = {
                 "Authorization": f"Bearer {token}",
                 "Accept": "application/vnd.github+json",
-                "User-Agent": "NuvioMobileFast-Release-Script",
+                "User-Agent": "NuvioMobile-Fast-Release-Script",
             }
             del_req = urllib.request.Request(del_url, headers=del_headers, method="DELETE")
             try:
@@ -301,7 +301,7 @@ def upload_via_api(token, tag, title, notes, apks, is_prerelease=False):
         up_headers = {
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
-            "User-Agent": "NuvioMobileFast-Release-Script",
+            "User-Agent": "NuvioMobile-Fast-Release-Script",
             "Content-Type": "application/vnd.android.package-archive",
             "Content-Length": str(len(apk_bytes)),
         }

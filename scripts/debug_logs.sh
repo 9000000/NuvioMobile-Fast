@@ -18,7 +18,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 
-PACKAGE="${NUVIO_LOG_PACKAGE:-com.nuviodebug.com}"
+PACKAGE="${NUVIO_LOG_PACKAGE:-com.nuvio.fast.debug}"
 SERIAL=""
 CLEAR_BUFFER=false
 TAG_FILTER=""
@@ -63,7 +63,7 @@ Stream live colour-coded ADB logs for Nuvio debug builds.
 
 Options:
   -s, --serial <id>     ADB device serial (optional)
-  -p, --package <name>  Android package/applicationId (default: com.nuviodebug.com)
+  -p, --package <name>  Android package/applicationId (default: com.nuvio.fast.debug)
   -t, --tag <regex>     Additional grep regex to filter log tags
       --p2p             Focus on engine phases, route telemetry, and player startup
   -c, --clear           Clear logcat buffer before streaming
@@ -76,7 +76,7 @@ Hotkeys (while running):
 Examples:
   ./scripts/debug_logs.sh
   ./scripts/debug_logs.sh --serial emulator-5554
-  ./scripts/debug_logs.sh --package com.nuvio.app
+  ./scripts/debug_logs.sh --package com.nuvio.fast
   ./scripts/debug_logs.sh --clear --p2p
   ./scripts/debug_logs.sh --serial emulator-5554 --clear --p2p
   ./scripts/debug_logs.sh --tag 'MetaDetailsRepo|SeriesContent'

@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GRADLEW="$ROOT_DIR/gradlew"
 
-ANDROID_APP_ID="com.nuvio.app"
+ANDROID_APP_ID="com.nuvio.fast.debug"
 ANDROID_ACTIVITY=".MainActivity"
 IOS_PROJECT="$ROOT_DIR/iosApp/iosApp.xcodeproj"
 IOS_SCHEME="iosApp"

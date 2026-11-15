@@ -40,10 +40,10 @@ internal object AppUpdaterRepository {
     suspend fun getLatestChannelUpdate(channel: UpdateChannel): Result<AppUpdate> = runCatching {
         val response = httpRequestRaw(
             method = "GET",
-            url = "https://api.github.com/repos/9000000/NuvioMobileFast/${releasePath(channel)}",
+            url = "https://api.github.com/repos/9000000/NuvioMobile-Fast/${releasePath(channel)}",
             headers = mapOf(
                 "Accept" to "application/vnd.github+json",
-                "User-Agent" to "NuvioMobileFast",
+                "User-Agent" to "NuvioMobile-Fast",
             ),
             body = "",
         )
