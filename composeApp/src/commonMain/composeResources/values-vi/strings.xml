@@ -427,7 +427,7 @@
     <string name="compose_player_auto_sync">Tự đồng bộ</string>
     <string name="compose_player_bold">In đậm</string>
     <string name="compose_player_built_in">Tích hợp</string>
-    <string name="compose_player_bottom_offset">Khoảng cách lề dưới</string>
+    <string name="compose_player_bottom_offset">Vị trí phụ đề (thấp - cao)</string>
     <string name="compose_player_capture_line">Chụp</string>
     <string name="compose_player_close">Đóng trình phát</string>
     <string name="compose_player_color">Màu sắc</string>
@@ -1217,7 +1217,7 @@
     <string name="settings_playback_subtitle_text_color">Màu chữ</string>
     <string name="settings_playback_subtitle_use_forced">Sử dụng phụ đề bắt buộc</string>
     <string name="settings_playback_subtitle_use_forced_description">Ưu tiên phụ đề bắt buộc khi ngôn ngữ âm thanh trùng với ngôn ngữ phụ đề; nếu không có thì không chọn gì cả.</string>
-    <string name="settings_playback_subtitle_vertical_offset">Độ lệch dọc</string>
+    <string name="settings_playback_subtitle_vertical_offset">Vị trí phụ đề (thấp - cao)</string>
     <string name="settings_playback_skip_intro_outro_recap">Bỏ qua Giới thiệu</string>
     <string name="settings_playback_skip_intro_outro_recap_description">Dùng introdb.app để tự động nhận diện phần giới thiệu và tóm tắt.</string>
     <string name="settings_playback_source_scope">Phạm vi nguồn tự động phát</string>
@@ -2657,6 +2657,8 @@
     <string name="subtitle_appearance_hint">Áp dụng cho phụ đề văn bản. Phụ đề ASS có kiểu định dạng và phụ đề hình ảnh vẫn giữ nguyên giao diện ban đầu.</string>
     <string name="subtitle_font">Phông chữ</string>
     <string name="subtitle_font_default">Mặc định</string>
+    <string name="subtitle_font_phimmoi">Phim Mới (Phimmoi)</string>
+    <string name="subtitle_font_oswald">Oswald</string>
     <string name="subtitle_font_sans">Kiểu chữ không chân</string>
     <string name="subtitle_font_serif">Kiểu chữ có chân</string>
     <string name="subtitle_font_mono">Kiểu chữ đơn cách</string>

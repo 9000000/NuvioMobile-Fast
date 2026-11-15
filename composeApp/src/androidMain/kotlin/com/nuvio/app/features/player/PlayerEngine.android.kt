@@ -2146,6 +2146,14 @@ private class NuvioLibmpvView(
                     mpv.setPropertyString("sub-border-color", style.outlineColor.toMpvColor())
                     mpv.setPropertyString("sub-border-style", style.toMpvSubtitleBorderStyle())
                     mpv.setPropertyString("sub-bold", if (style.bold) "yes" else "no")
+                    mpv.setPropertyString("sub-font", when (style.appearance.fontId) {
+                        "phimmoi" -> "Phimmoi"
+                        "oswald" -> "Oswald"
+                        "serif" -> "serif"
+                        "mono" -> "monospace"
+                        "sans" -> "sans-serif"
+                        else -> "sans-serif"
+                    })
                     mpv.setPropertyInt("sub-font-size", style.toMpvSubtitleFontSize())
                     mpv.setPropertyInt("sub-outline-size", style.toMpvSubtitleOutlineSize())
                     mpv.setPropertyInt("sub-border-size", style.toMpvSubtitleOutlineSize())
@@ -2560,11 +2568,6 @@ private class SubtitleStyleGuard {
     }
 }
 
-/**
- * [pipVideoHeightPx] is null outside PiP. In PiP it is the video height outside PiP (0 if unknown),
- * so subtitles shrink and grow with the video exactly as it is shown full screen.
- */
-
 private fun transformedChildBoundsInParent(child: View): android.graphics.RectF? {
     if (child.width <= 0 || child.height <= 0) return null
     return android.graphics.RectF(0f, 0f, child.width.toFloat(), child.height.toFloat()).also { bounds ->
@@ -2635,6 +2638,21 @@ private fun android.widget.FrameLayout.findAssOverlayChild(): AssSubtitleSurface
     return null
 }
 
+private fun resolveSubtitleTypeface(context: Context, style: SubtitleStyleState): Typeface {
+    val base = when (style.appearance.fontId) {
+        "phimmoi" -> runCatching { Typeface.createFromAsset(context.assets, "fonts/Phimmoi.TTF") }.getOrNull()
+        "oswald" -> runCatching { Typeface.createFromAsset(context.assets, "fonts/Oswald.ttf") }.getOrNull()
+        "serif" -> Typeface.SERIF
+        "mono" -> Typeface.MONOSPACE
+        "sans" -> Typeface.SANS_SERIF
+        else -> {
+            val customFile = java.io.File(context.filesDir, "subtitle-fonts").resolve(style.appearance.fontId)
+            if (customFile.isFile) runCatching { Typeface.createFromFile(customFile) }.getOrNull() else null
+        }
+    } ?: Typeface.DEFAULT
+    return if (style.bold) Typeface.create(base, Typeface.BOLD) else base
+}
+
 /**
  * [pipVideoHeightPx] is null outside PiP. In PiP it is the video height outside PiP (0 if unknown),
  * so subtitles shrink and grow with the video exactly as it is shown full screen.
@@ -2655,7 +2673,7 @@ private fun PlayerView.applySubtitleStyle(style: SubtitleStyleState, pipVideoHei
                 android.graphics.Color.TRANSPARENT,
                 if (style.outlineEnabled) CaptionStyleCompat.EDGE_TYPE_OUTLINE else CaptionStyleCompat.EDGE_TYPE_NONE,
                 style.outlineColor.toArgb(),
-                if (style.bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT,
+                resolveSubtitleTypeface(context, style),
             )
         )
         val fontSizeSp = style.fontSizeSp.toFloat()

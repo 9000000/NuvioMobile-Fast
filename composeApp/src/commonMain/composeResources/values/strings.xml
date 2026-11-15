@@ -2681,6 +2681,8 @@
     <string name="subtitle_appearance_hint">Applies to text subtitles. Styled ASS and image subtitles keep their original appearance.</string>
     <string name="subtitle_font">Font</string>
     <string name="subtitle_font_default">Default</string>
+    <string name="subtitle_font_phimmoi">Phimmoi</string>
+    <string name="subtitle_font_oswald">Oswald</string>
     <string name="subtitle_font_sans">Sans serif</string>
     <string name="subtitle_font_serif">Serif</string>
     <string name="subtitle_font_mono">Monospace</string>

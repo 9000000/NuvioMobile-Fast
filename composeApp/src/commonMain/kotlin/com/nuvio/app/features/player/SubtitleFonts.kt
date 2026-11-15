@@ -8,6 +8,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.oswald
+import nuvio.composeapp.generated.resources.phimmoi
+import org.jetbrains.compose.resources.Font
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -66,6 +70,8 @@ internal fun isSupportedSubtitleFont(name: String, bytes: ByteArray): Boolean {
 
 @Composable
 internal fun rememberSubtitleFontFamily(id: String): FontFamily {
+    if (id == "phimmoi") return FontFamily(Font(Res.font.phimmoi))
+    if (id == "oswald") return FontFamily(Font(Res.font.oswald))
     val family = produceState<FontFamily>(FontFamily.SansSerif, id) {
         value = withContext(Dispatchers.Default) {
             when (id) {

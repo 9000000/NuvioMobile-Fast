@@ -20,7 +20,7 @@ data class SubtitleAppearance(
     )
 }
 
-internal val BuiltInSubtitleFonts = listOf("default", "sans", "serif", "mono")
+internal val BuiltInSubtitleFonts = listOf("default", "phimmoi", "oswald", "sans", "serif", "mono")
 private val subtitleAppearanceJson = Json { ignoreUnknownKeys = true }
 
 internal fun decodeSubtitleAppearance(value: String?): SubtitleAppearance =

@@ -29,6 +29,8 @@ import org.jetbrains.compose.resources.stringResource
 
 @Composable
 internal fun subtitleFontLabel(id: String, fonts: List<SubtitleFont>? = null): String = when (id) {
+    "phimmoi" -> stringResource(Res.string.subtitle_font_phimmoi)
+    "oswald" -> stringResource(Res.string.subtitle_font_oswald)
     "sans" -> stringResource(Res.string.subtitle_font_sans)
     "serif" -> stringResource(Res.string.subtitle_font_serif)
     "mono" -> stringResource(Res.string.subtitle_font_mono)
