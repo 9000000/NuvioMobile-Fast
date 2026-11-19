@@ -120,7 +120,7 @@ class SimklApiClientTest {
             harness.client.execute(
                 SimklApiRequest(
                     method = SimklHttpMethod.POST,
-                    path = "/oauth/token",
+                    path = "/oauth2/token",
                     body = "{}",
                     requiresAuthentication = false,
                     retryPolicy = SimklRetryPolicy.NEVER,
@@ -147,7 +147,7 @@ class SimklApiClientTest {
             harness.client.execute(
                 SimklApiRequest(
                     method = SimklHttpMethod.POST,
-                    path = "/oauth/token",
+                    path = "/oauth2/token",
                     body = "{}",
                     requiresAuthentication = false,
                     retryPolicy = SimklRetryPolicy.NEVER,
@@ -181,7 +181,7 @@ class SimklApiClientTest {
         harness.client.execute(
             SimklApiRequest(
                 method = SimklHttpMethod.POST,
-                path = "/oauth/token",
+                path = "/oauth2/token",
                 body = "{}",
                 requiresAuthentication = false,
                 retryPolicy = SimklRetryPolicy.NEVER,
