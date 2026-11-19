@@ -79,7 +79,10 @@ import nuvio.composeapp.generated.resources.action_retry
 import nuvio.composeapp.generated.resources.live_tv_action_back_to_top
 import nuvio.composeapp.generated.resources.live_tv_empty_favorites_message
 import nuvio.composeapp.generated.resources.live_tv_empty_favorites_title
+import nuvio.composeapp.generated.resources.live_tv_empty_recent_message
+import nuvio.composeapp.generated.resources.live_tv_empty_recent_title
 import nuvio.composeapp.generated.resources.live_tv_filter_default_view
+import nuvio.composeapp.generated.resources.live_tv_filter_recent
 import nuvio.composeapp.generated.resources.live_tv_filter_select_playlist
 import nuvio.composeapp.generated.resources.live_tv_button_continue
 import nuvio.composeapp.generated.resources.live_tv_empty_message
@@ -119,10 +122,39 @@ fun LiveTvScreen(
         }
     }
     var searchQuery by rememberSaveable { mutableStateOf("") }
-    var filterMode by rememberSaveable { mutableStateOf(LiveTvChannelFilterMode.Favorites) }
+    val initialSelectedPlaylistId = remember { LiveTvStorage.loadLastSelectedPlaylistId() }
+    var selectedPlaylistId by rememberSaveable { mutableStateOf(initialSelectedPlaylistId) }
+    val initialFavoritesExist = remember {
+        LiveTvStorage.loadFavoriteChannelIdsBlob().orEmpty().lineSequence().any(String::isNotBlank)
+    }
+    val initialRecentExist = remember {
+        LiveTvStorage.loadRecentChannelIdsBlob().orEmpty().lineSequence().any(String::isNotBlank) ||
+            !LiveTvStorage.loadLastWatchedChannelId().isNullOrBlank()
+    }
+    val defaultFilterMode = remember {
+        when {
+            initialFavoritesExist -> LiveTvChannelFilterMode.Favorites
+            initialRecentExist -> LiveTvChannelFilterMode.Recent
+            else -> LiveTvChannelFilterMode.All
+        }
+    }
+    var filterMode by rememberSaveable { mutableStateOf(defaultFilterMode) }
     var selectedCategoryName by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedPlaylistId by rememberSaveable { mutableStateOf<String?>(null) }
     var launchingChannelId by remember { mutableStateOf<String?>(null) }
+    var hasEvaluatedInitialSelection by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.channels, uiState.favoriteChannelIds, uiState.recentChannelIds) {
+        if (!hasEvaluatedInitialSelection && uiState.channels.isNotEmpty()) {
+            hasEvaluatedInitialSelection = true
+            val hasFavorites = uiState.channels.any { it.id in uiState.favoriteChannelIds }
+            val hasRecent = uiState.channels.any { it.id in uiState.recentChannelIds.toSet() }
+            filterMode = when {
+                hasFavorites -> LiveTvChannelFilterMode.Favorites
+                hasRecent -> LiveTvChannelFilterMode.Recent
+                else -> LiveTvChannelFilterMode.All
+            }
+        }
+    }
 
     val resetTrigger by LiveTvRepository.navigationResetEvent.collectAsStateWithLifecycle()
     var lastHandledResetTrigger by rememberSaveable { mutableStateOf(0L) }
@@ -132,13 +164,20 @@ fun LiveTvScreen(
             lastHandledResetTrigger = resetTrigger
             selectedPlaylistId = null
             selectedCategoryName = null
-            filterMode = LiveTvChannelFilterMode.Favorites
             searchQuery = ""
+            val hasFavorites = uiState.channels.any { it.id in uiState.favoriteChannelIds }
+            val hasRecent = uiState.channels.any { it.id in uiState.recentChannelIds.toSet() }
+            filterMode = when {
+                hasFavorites -> LiveTvChannelFilterMode.Favorites
+                hasRecent -> LiveTvChannelFilterMode.Recent
+                else -> LiveTvChannelFilterMode.All
+            }
         }
     }
 
     val allChannelsLabel = stringResource(Res.string.live_tv_group_all_channels)
     val favoritesLabel = stringResource(Res.string.live_tv_filter_favorites)
+    val recentLabel = stringResource(Res.string.live_tv_filter_recent)
     val uncategorizedLabel = stringResource(Res.string.live_tv_group_uncategorized)
     val chooseCategoryLabel = stringResource(Res.string.live_tv_filter_choose_category)
     val allPlaylistsLabel = stringResource(Res.string.live_tv_filter_default_view)
@@ -206,6 +245,7 @@ fun LiveTvScreen(
         channelsInPlaylist,
         uiState.channels,
         uiState.favoriteChannelIds,
+        uiState.recentChannelIds,
         filterMode,
         selectedCategoryName,
         searchQuery,
@@ -215,6 +255,7 @@ fun LiveTvScreen(
             channels = channelsInPlaylist,
             allChannels = uiState.channels,
             favoriteChannelIds = uiState.favoriteChannelIds,
+            recentChannelIds = uiState.recentChannelIds,
             filterMode = filterMode,
             selectedCategoryName = selectedCategoryName,
             searchQuery = searchQuery,
@@ -228,8 +269,25 @@ fun LiveTvScreen(
         }
     }
 
+    LaunchedEffect(activePlaylists, selectedPlaylistId) {
+        if (activePlaylists.isNotEmpty()) {
+            val isCurrentPlaylistValid = selectedPlaylistId != null && activePlaylists.any { it.id == selectedPlaylistId }
+            if (!isCurrentPlaylistValid) {
+                val candidateId = lastWatchedChannel?.playlistId?.takeIf { candidate ->
+                    activePlaylists.any { it.id == candidate }
+                } ?: activePlaylists.first().id
+                selectedPlaylistId = candidateId
+                LiveTvStorage.saveLastSelectedPlaylistId(candidateId)
+            }
+        }
+    }
+
     val playChannel: (LiveTvChannel) -> Unit = { channel ->
         launchingChannelId = channel.id
+        channel.playlistId?.takeIf { it.isNotBlank() }?.let { playlistId ->
+            selectedPlaylistId = playlistId
+            LiveTvStorage.saveLastSelectedPlaylistId(playlistId)
+        }
         LiveTvRepository.markChannelWatched(channel)
         onChannelClick(channel)
     }
@@ -258,11 +316,16 @@ fun LiveTvScreen(
             // Đảm bảo chọn đúng Playlist chứa kênh
             if (targetChannel.playlistId != null && selectedPlaylistId != targetChannel.playlistId) {
                 selectedPlaylistId = targetChannel.playlistId
+                LiveTvStorage.saveLastSelectedPlaylistId(targetChannel.playlistId)
             }
 
             // Đảm bảo filterMode và category hiển thị kênh
             val isFavorite = targetChannelId in uiState.favoriteChannelIds
+            val isRecent = targetChannelId in uiState.recentChannelIds
             if (filterMode == LiveTvChannelFilterMode.Favorites && !isFavorite) {
+                filterMode = LiveTvChannelFilterMode.All
+                selectedCategoryName = null
+            } else if (filterMode == LiveTvChannelFilterMode.Recent && !isRecent) {
                 filterMode = LiveTvChannelFilterMode.All
                 selectedCategoryName = null
             } else if (filterMode == LiveTvChannelFilterMode.Category && selectedCategoryName != null) {
@@ -419,8 +482,10 @@ fun LiveTvScreen(
                                 .map { option -> option.label },
                             selectedGroup = selectedCategoryName,
                             favoritesOnly = filterMode == LiveTvChannelFilterMode.Favorites,
+                            recentOnly = filterMode == LiveTvChannelFilterMode.Recent,
                             allLabel = allChannelsLabel,
                             favoritesLabel = favoritesLabel,
+                            recentLabel = recentLabel,
                             categoryLabel = chooseCategoryLabel,
                             playlists = activePlaylists,
                             selectedPlaylist = selectedPlaylist,
@@ -428,6 +493,7 @@ fun LiveTvScreen(
                             allPlaylistsLabel = allPlaylistsLabel,
                             onPlaylistSelected = { playlist ->
                                 selectedPlaylistId = playlist?.id
+                                LiveTvStorage.saveLastSelectedPlaylistId(playlist?.id)
                                 filterMode = if (playlist == null) LiveTvChannelFilterMode.Favorites else LiveTvChannelFilterMode.All
                                 selectedCategoryName = null
                             },
@@ -437,6 +503,10 @@ fun LiveTvScreen(
                             },
                             onFavoritesSelected = {
                                 filterMode = LiveTvChannelFilterMode.Favorites
+                                selectedCategoryName = null
+                            },
+                            onRecentSelected = {
+                                filterMode = LiveTvChannelFilterMode.Recent
                                 selectedCategoryName = null
                             },
                             onGroupSelected = { category ->
@@ -452,16 +522,25 @@ fun LiveTvScreen(
 
                     if (visibleChannels.isEmpty()) {
                         item {
-                            if (selectedPlaylistId == null && filterMode == LiveTvChannelFilterMode.Favorites && searchQuery.isBlank()) {
-                                HomeEmptyStateCard(
-                                    title = stringResource(Res.string.live_tv_empty_favorites_title),
-                                    message = stringResource(Res.string.live_tv_empty_favorites_message),
-                                )
-                            } else {
-                                HomeEmptyStateCard(
-                                    title = stringResource(Res.string.live_tv_no_matching_channels_title),
-                                    message = stringResource(Res.string.live_tv_no_matching_channels_message),
-                                )
+                            when {
+                                filterMode == LiveTvChannelFilterMode.Favorites && searchQuery.isBlank() -> {
+                                    HomeEmptyStateCard(
+                                        title = stringResource(Res.string.live_tv_empty_favorites_title),
+                                        message = stringResource(Res.string.live_tv_empty_favorites_message),
+                                    )
+                                }
+                                filterMode == LiveTvChannelFilterMode.Recent && searchQuery.isBlank() -> {
+                                    HomeEmptyStateCard(
+                                        title = stringResource(Res.string.live_tv_empty_recent_title),
+                                        message = stringResource(Res.string.live_tv_empty_recent_message),
+                                    )
+                                }
+                                else -> {
+                                    HomeEmptyStateCard(
+                                        title = stringResource(Res.string.live_tv_no_matching_channels_title),
+                                        message = stringResource(Res.string.live_tv_no_matching_channels_message),
+                                    )
+                                }
                             }
                         }
                     } else {
@@ -983,6 +1062,7 @@ private fun ChannelLogo(
 internal enum class LiveTvChannelFilterMode {
     All,
     Favorites,
+    Recent,
     Category,
 }
 
@@ -1022,19 +1102,28 @@ internal fun filterLiveTvChannels(
     channels: List<LiveTvChannel>,
     allChannels: List<LiveTvChannel> = channels,
     favoriteChannelIds: Set<String>,
+    recentChannelIds: List<String> = emptyList(),
     filterMode: LiveTvChannelFilterMode,
     selectedCategoryName: String?,
     searchQuery: String,
     uncategorizedGroupName: String,
 ): List<LiveTvChannel> {
-    val sourceChannels = if (filterMode == LiveTvChannelFilterMode.Favorites) allChannels else channels
+    val sourceChannels = when (filterMode) {
+        LiveTvChannelFilterMode.Favorites -> allChannels
+        LiveTvChannelFilterMode.Recent -> {
+            val channelMap = allChannels.associateBy { it.id }
+            recentChannelIds.mapNotNull { channelMap[it] }
+        }
+        else -> channels
+    }
     val normalizedQuery = searchQuery.trim().lowercase()
-    return sourceChannels
+    val filtered = sourceChannels
         .asSequence()
         .filter { channel ->
             when (filterMode) {
                 LiveTvChannelFilterMode.All -> true
                 LiveTvChannelFilterMode.Favorites -> channel.id in favoriteChannelIds
+                LiveTvChannelFilterMode.Recent -> true
                 LiveTvChannelFilterMode.Category -> selectedCategoryName == null ||
                     categoryNameForChannel(channel, uncategorizedGroupName).equals(selectedCategoryName, ignoreCase = true)
             }
@@ -1045,8 +1134,12 @@ internal fun filterLiveTvChannels(
                 categoryNameForChannel(channel, uncategorizedGroupName).lowercase().contains(normalizedQuery) ||
                 channel.playlistName.orEmpty().lowercase().contains(normalizedQuery)
         }
-        .sortedBy { it.name.lowercase() }
-        .toList()
+
+    return if (filterMode == LiveTvChannelFilterMode.Recent && normalizedQuery.isBlank()) {
+        filtered.toList()
+    } else {
+        filtered.sortedBy { it.name.lowercase() }.toList()
+    }
 }
 
 private fun categoryNameForChannel(

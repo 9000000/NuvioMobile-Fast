@@ -9,7 +9,9 @@ actual object LiveTvStorage {
     private const val playlistUrlKey = "playlist_url"
     private const val playlistsBlobKey = "playlists_blob"
     private const val favoriteChannelIdsBlobKey = "favorite_channel_ids_blob"
+    private const val recentChannelIdsBlobKey = "recent_channel_ids_blob"
     private const val lastWatchedChannelIdKey = "last_watched_channel_id"
+    private const val lastSelectedPlaylistIdKey = "last_selected_playlist_id"
     private const val navigationEnabledKey = "navigation_enabled"
     private const val stalkerSettingsKey = "stalker_settings"
     private const val xtreamSettingsKey = "xtream_settings"
@@ -50,6 +52,16 @@ actual object LiveTvStorage {
             ?.apply()
     }
 
+    actual fun loadRecentChannelIdsBlob(): String? =
+        preferences?.getString(ProfileScopedKey.of(recentChannelIdsBlobKey), null)
+
+    actual fun saveRecentChannelIdsBlob(blob: String) {
+        preferences
+            ?.edit()
+            ?.putString(ProfileScopedKey.of(recentChannelIdsBlobKey), blob)
+            ?.apply()
+    }
+
     actual fun loadLastWatchedChannelId(): String? =
         preferences?.getString(ProfileScopedKey.of(lastWatchedChannelIdKey), null)
 
@@ -58,6 +70,20 @@ actual object LiveTvStorage {
             ?.edit()
             ?.putString(ProfileScopedKey.of(lastWatchedChannelIdKey), channelId)
             ?.apply()
+    }
+
+    actual fun loadLastSelectedPlaylistId(): String? =
+        preferences?.getString(ProfileScopedKey.of(lastSelectedPlaylistIdKey), null)
+
+    actual fun saveLastSelectedPlaylistId(playlistId: String?) {
+        val editor = preferences?.edit() ?: return
+        val key = ProfileScopedKey.of(lastSelectedPlaylistIdKey)
+        if (playlistId == null) {
+            editor.remove(key)
+        } else {
+            editor.putString(key, playlistId)
+        }
+        editor.apply()
     }
 
     actual fun loadNavigationEnabled(): Boolean? {

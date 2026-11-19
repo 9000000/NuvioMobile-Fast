@@ -175,6 +175,21 @@ class LiveTvRepositoryTest {
         )
         assertEquals(1, allResult.size)
         assertEquals("ch-1", allResult.first().id)
+
+        // When in Recent mode, channels from all playlists are retained in recent order
+        val recentResult = filterLiveTvChannels(
+            channels = playlistAChannels,
+            allChannels = allChannels,
+            favoriteChannelIds = favoriteIds,
+            recentChannelIds = listOf("ch-3", "ch-1"),
+            filterMode = LiveTvChannelFilterMode.Recent,
+            selectedCategoryName = null,
+            searchQuery = "",
+            uncategorizedGroupName = "Uncategorized",
+        )
+        assertEquals(2, recentResult.size)
+        assertEquals("ch-3", recentResult[0].id)
+        assertEquals("ch-1", recentResult[1].id)
     }
 }
 

@@ -55,17 +55,21 @@ import nuvio.composeapp.generated.resources.live_tv_categories
 import org.jetbrains.compose.resources.stringResource
 
 import androidx.compose.material.icons.rounded.FormatListBulleted
+import androidx.compose.material.icons.rounded.History
 
 @Composable
 internal fun LiveTvFilterPanelRow(
     groups: List<String>,
     selectedGroup: String?,
     favoritesOnly: Boolean,
+    recentOnly: Boolean = false,
     allLabel: String,
     favoritesLabel: String,
+    recentLabel: String = "",
     categoryLabel: String,
     onAllSelected: () -> Unit,
     onFavoritesSelected: () -> Unit,
+    onRecentSelected: () -> Unit = {},
     onGroupSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
     playlists: List<LiveTvPlaylist> = emptyList(),
@@ -89,29 +93,33 @@ internal fun LiveTvFilterPanelRow(
                 onPlaylistSelected = onPlaylistSelected,
             )
         }
-        if (selectedPlaylist != null) {
-            LiveTvPanelFilterChip(
-                label = allLabel,
-                selected = selectedGroup.isNullOrBlank() && !favoritesOnly,
-                onClick = onAllSelected,
-            )
-        }
         LiveTvPanelFilterChip(
             label = favoritesLabel,
-            selected = favoritesOnly || selectedPlaylist == null,
+            selected = favoritesOnly,
             onClick = onFavoritesSelected,
         )
-        if (selectedPlaylist != null && groups.isNotEmpty()) {
+        if (recentLabel.isNotBlank()) {
+            LiveTvPanelFilterChip(
+                label = recentLabel,
+                selected = recentOnly,
+                onClick = onRecentSelected,
+                icon = Icons.Rounded.History,
+            )
+        }
+        if (selectedPlaylist != null) {
             LiveTvCategoryPanelChip(
-                label = selectedGroup?.takeIf { it.isNotBlank() && !favoritesOnly } ?: categoryLabel,
-                selectedGroup = selectedGroup?.takeIf { it.isNotBlank() && !favoritesOnly },
+                label = selectedGroup?.takeIf { it.isNotBlank() && !favoritesOnly && !recentOnly } ?: categoryLabel,
+                selectedGroup = selectedGroup?.takeIf { it.isNotBlank() && !favoritesOnly && !recentOnly },
                 favoritesOnly = favoritesOnly,
+                recentOnly = recentOnly,
                 groups = groups,
                 categoryTitle = categoryLabel,
                 allLabel = allLabel,
                 favoritesLabel = favoritesLabel,
+                recentLabel = recentLabel,
                 onAllSelected = onAllSelected,
                 onFavoritesSelected = onFavoritesSelected,
+                onRecentSelected = onRecentSelected,
                 onGroupSelected = onGroupSelected,
             )
         }
@@ -123,6 +131,7 @@ private fun LiveTvPanelFilterChip(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
+    icon: ImageVector? = null,
 ) {
     val tokens = MaterialTheme.nuvio
     Row(
@@ -145,6 +154,14 @@ private fun LiveTvPanelFilterChip(
         horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s6),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(NuvioTokens.Icon.sm + NuvioTokens.Space.s2),
+                tint = if (selected) tokens.colors.accent else tokens.colors.textSecondary,
+            )
+        }
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge,
@@ -162,19 +179,22 @@ private fun LiveTvCategoryPanelChip(
     label: String,
     selectedGroup: String?,
     favoritesOnly: Boolean,
+    recentOnly: Boolean,
     groups: List<String>,
     categoryTitle: String,
     allLabel: String,
     favoritesLabel: String,
+    recentLabel: String,
     onAllSelected: () -> Unit,
     onFavoritesSelected: () -> Unit,
+    onRecentSelected: () -> Unit,
     onGroupSelected: (String) -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio
     var isSheetVisible by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val coroutineScope = rememberCoroutineScope()
-    val selected = selectedGroup != null
+    val selected = selectedGroup != null || (!favoritesOnly && !recentOnly)
     val shape = tokens.shapes.chip
 
     Row(
@@ -213,8 +233,10 @@ private fun LiveTvCategoryPanelChip(
             groups = groups,
             selectedGroup = selectedGroup,
             favoritesOnly = favoritesOnly,
+            recentOnly = recentOnly,
             allLabel = allLabel,
             favoritesLabel = favoritesLabel,
+            recentLabel = recentLabel,
             sheetState = sheetState,
             onDismiss = {
                 coroutineScope.launch {
@@ -242,6 +264,15 @@ private fun LiveTvCategoryPanelChip(
                     )
                 }
             },
+            onRecentSelected = {
+                onRecentSelected()
+                coroutineScope.launch {
+                    dismissNuvioBottomSheet(
+                        sheetState = sheetState,
+                        onDismiss = { isSheetVisible = false },
+                    )
+                }
+            },
             onGroupSelected = { group ->
                 onGroupSelected(group)
                 coroutineScope.launch {
@@ -262,12 +293,15 @@ private fun LiveTvCategoryOptionsSheet(
     groups: List<String>,
     selectedGroup: String?,
     favoritesOnly: Boolean,
+    recentOnly: Boolean,
     allLabel: String,
     favoritesLabel: String,
+    recentLabel: String,
     sheetState: SheetState,
     onDismiss: () -> Unit,
     onAllSelected: () -> Unit,
     onFavoritesSelected: () -> Unit,
+    onRecentSelected: () -> Unit,
     onGroupSelected: (String) -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio
@@ -311,7 +345,7 @@ private fun LiveTvCategoryOptionsSheet(
                 LiveTvFilterSheetRow(
                     title = allLabel,
                     icon = Icons.Rounded.Tv,
-                    selected = selectedGroup.isNullOrBlank() && !favoritesOnly,
+                    selected = selectedGroup.isNullOrBlank() && !favoritesOnly && !recentOnly,
                     onClick = onAllSelected,
                 )
                 LiveTvFilterSheetDivider()
@@ -325,30 +359,43 @@ private fun LiveTvCategoryOptionsSheet(
                 )
                 LiveTvFilterSheetDivider()
             }
-            item(key = "live_tv_filter_categories_header") {
-                Text(
-                    text = stringResource(Res.string.live_tv_categories),
-                    modifier = Modifier.padding(
-                        horizontal = tokens.spacing.screenHorizontal,
-                        vertical = NuvioTokens.Space.s10,
-                    ),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = tokens.colors.textMuted,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                LiveTvFilterSheetDivider()
-            }
-            items(
-                items = groups,
-                key = { group -> group },
-            ) { group ->
-                LiveTvFilterSheetRow(
-                    title = group,
-                    selected = group == selectedGroup,
-                    onClick = { onGroupSelected(group) },
-                )
-                if (group != groups.lastOrNull()) {
+            if (recentLabel.isNotBlank()) {
+                item(key = "live_tv_filter_recent") {
+                    LiveTvFilterSheetRow(
+                        title = recentLabel,
+                        icon = Icons.Rounded.History,
+                        selected = recentOnly,
+                        onClick = onRecentSelected,
+                    )
                     LiveTvFilterSheetDivider()
+                }
+            }
+            if (groups.isNotEmpty()) {
+                item(key = "live_tv_filter_categories_header") {
+                    Text(
+                        text = stringResource(Res.string.live_tv_categories),
+                        modifier = Modifier.padding(
+                            horizontal = tokens.spacing.screenHorizontal,
+                            vertical = NuvioTokens.Space.s10,
+                        ),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = tokens.colors.textMuted,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    LiveTvFilterSheetDivider()
+                }
+                items(
+                    items = groups,
+                    key = { group -> group },
+                ) { group ->
+                    LiveTvFilterSheetRow(
+                        title = group,
+                        selected = group == selectedGroup,
+                        onClick = { onGroupSelected(group) },
+                    )
+                    if (group != groups.lastOrNull()) {
+                        LiveTvFilterSheetDivider()
+                    }
                 }
             }
         }

@@ -54,6 +54,7 @@ data class LiveTvUiState(
     val xtreamSettings: LiveTvXtreamSettings = LiveTvXtreamSettings(),
     val channels: List<LiveTvChannel> = emptyList(),
     val favoriteChannelIds: Set<String> = emptySet(),
+    val recentChannelIds: List<String> = emptyList(),
     val lastWatchedChannelId: String? = null,
     val isNavigationEnabled: Boolean = true,
     val isLoading: Boolean = false,

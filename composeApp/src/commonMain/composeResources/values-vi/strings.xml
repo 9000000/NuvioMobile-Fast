@@ -2417,8 +2417,9 @@
     <string name="live_tv_group_all_channels">Tất cả kênh</string>
     <string name="live_tv_group_uncategorized">Chưa phân loại</string>
     <string name="live_tv_search_placeholder">Tìm kiếm kênh</string>
-    <string name="live_tv_filter_favorites">Yêu thích</string>
-    <string name="live_tv_filter_choose_category">Chọn danh mục</string>
+    <string name="live_tv_filter_favorites">❤️⭐</string>
+    <string name="live_tv_filter_recent">Xem gần đây</string>
+    <string name="live_tv_filter_choose_category">Danh mục</string>
     <string name="live_tv_categories">Danh mục</string>
     <string name="live_tv_section_channels">Danh sách kênh</string>
     <string name="live_tv_last_watched_title">Kênh xem gần nhất</string>
@@ -2468,10 +2469,12 @@
     <string name="live_tv_settings_save_playlist">Lưu</string>
     <string name="live_tv_settings_cancel_edit">Hủy</string>
     <string name="compose_player_channels">Kênh</string>
-    <string name="live_tv_filter_select_playlist">Chọn danh sách phát</string>
+    <string name="live_tv_filter_select_playlist">List Kênh</string>
     <string name="live_tv_filter_default_view">Mặc định (Gần đây &amp; Yêu thích)</string>
     <string name="live_tv_empty_favorites_title">Chưa có kênh yêu thích</string>
     <string name="live_tv_empty_favorites_message">Chọn danh sách phát để duyệt kênh và bấm biểu tượng ngôi sao để thêm vào yêu thích.</string>
+    <string name="live_tv_empty_recent_title">Chưa có kênh xem gần đây</string>
+    <string name="live_tv_empty_recent_message">Các kênh bạn vừa xem sẽ xuất hiện tại đây.</string>
     <string name="live_tv_filter_all_playlists">Tất cả danh sách phát</string>
     <string name="live_tv_filter_choose_playlist">All List</string>
     <string name="settings_playback_auto_skip_segments">Tự động bỏ qua</string>

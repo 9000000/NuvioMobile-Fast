@@ -63,6 +63,7 @@ object LiveTvRepository {
             stalkerSettings = LiveTvStorage.loadStalkerSettings(),
             xtreamSettings = LiveTvStorage.loadXtreamSettings(),
             favoriteChannelIds = loadFavoriteChannelIds(),
+            recentChannelIds = loadRecentChannelIds(),
             lastWatchedChannelId = LiveTvStorage.loadLastWatchedChannelId(),
             isNavigationEnabled = LiveTvStorage.loadNavigationEnabled() ?: true,
         )
@@ -190,6 +191,9 @@ object LiveTvRepository {
 
     fun removePlaylist(playlistId: String) {
         ensureLoaded()
+        if (LiveTvStorage.loadLastSelectedPlaylistId() == playlistId) {
+            LiveTvStorage.saveLastSelectedPlaylistId(null)
+        }
         val playlists = _uiState.value.playlists.filterNot { it.id == playlistId }
         persistPlaylists(playlists)
         _uiState.value = _uiState.value.copy(
@@ -624,7 +628,21 @@ object LiveTvRepository {
     fun markChannelWatched(channel: LiveTvChannel) {
         ensureLoaded()
         LiveTvStorage.saveLastWatchedChannelId(channel.id)
-        _uiState.value = _uiState.value.copy(lastWatchedChannelId = channel.id)
+        val updatedRecent = buildList {
+            add(channel.id)
+            addAll(_uiState.value.recentChannelIds.filterNot { it == channel.id })
+        }.take(50)
+        persistRecentChannelIds(updatedRecent)
+        _uiState.value = _uiState.value.copy(
+            lastWatchedChannelId = channel.id,
+            recentChannelIds = updatedRecent,
+        )
+    }
+
+    fun getLastSelectedPlaylistId(): String? = LiveTvStorage.loadLastSelectedPlaylistId()
+
+    fun saveLastSelectedPlaylistId(playlistId: String?) {
+        LiveTvStorage.saveLastSelectedPlaylistId(playlistId)
     }
 
     private fun publishNavigationVisibility() {
@@ -654,6 +672,23 @@ object LiveTvRepository {
 
     private fun persistFavoriteChannelIds(channelIds: Set<String>) {
         LiveTvStorage.saveFavoriteChannelIdsBlob(channelIds.sorted().joinToString("\n"))
+    }
+
+    private fun loadRecentChannelIds(): List<String> {
+        val list = LiveTvStorage.loadRecentChannelIdsBlob()
+            .orEmpty()
+            .lineSequence()
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .distinct()
+            .toList()
+        if (list.isNotEmpty()) return list
+        val legacyLastWatched = LiveTvStorage.loadLastWatchedChannelId()?.trim().orEmpty()
+        return if (legacyLastWatched.isNotBlank()) listOf(legacyLastWatched) else emptyList()
+    }
+
+    private fun persistRecentChannelIds(channelIds: List<String>) {
+        LiveTvStorage.saveRecentChannelIdsBlob(channelIds.take(50).joinToString("\n"))
     }
 }
 

@@ -8,7 +8,9 @@ actual object LiveTvStorage {
     private const val playlistUrlKey = "playlist_url"
     private const val playlistsBlobKey = "playlists_blob"
     private const val favoriteChannelIdsBlobKey = "favorite_channel_ids_blob"
+    private const val recentChannelIdsBlobKey = "recent_channel_ids_blob"
     private const val lastWatchedChannelIdKey = "last_watched_channel_id"
+    private const val lastSelectedPlaylistIdKey = "last_selected_playlist_id"
     private const val navigationEnabledKey = "navigation_enabled"
     private const val stalkerSettingsKey = "stalker_settings"
     private const val xtreamSettingsKey = "xtream_settings"
@@ -36,11 +38,31 @@ actual object LiveTvStorage {
         NSUserDefaults.standardUserDefaults.setObject(blob, forKey = ProfileScopedKey.of(favoriteChannelIdsBlobKey))
     }
 
+    actual fun loadRecentChannelIdsBlob(): String? =
+        NSUserDefaults.standardUserDefaults.stringForKey(ProfileScopedKey.of(recentChannelIdsBlobKey))
+
+    actual fun saveRecentChannelIdsBlob(blob: String) {
+        NSUserDefaults.standardUserDefaults.setObject(blob, forKey = ProfileScopedKey.of(recentChannelIdsBlobKey))
+    }
+
     actual fun loadLastWatchedChannelId(): String? =
         NSUserDefaults.standardUserDefaults.stringForKey(ProfileScopedKey.of(lastWatchedChannelIdKey))
 
     actual fun saveLastWatchedChannelId(channelId: String) {
         NSUserDefaults.standardUserDefaults.setObject(channelId, forKey = ProfileScopedKey.of(lastWatchedChannelIdKey))
+    }
+
+    actual fun loadLastSelectedPlaylistId(): String? =
+        NSUserDefaults.standardUserDefaults.stringForKey(ProfileScopedKey.of(lastSelectedPlaylistIdKey))
+
+    actual fun saveLastSelectedPlaylistId(playlistId: String?) {
+        val defaults = NSUserDefaults.standardUserDefaults
+        val key = ProfileScopedKey.of(lastSelectedPlaylistIdKey)
+        if (playlistId == null) {
+            defaults.removeObjectForKey(key)
+        } else {
+            defaults.setObject(playlistId, forKey = key)
+        }
     }
 
     actual fun loadNavigationEnabled(): Boolean? {
