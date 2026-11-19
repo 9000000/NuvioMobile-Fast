@@ -794,7 +794,6 @@
     <string name="settings_poster_width_dense">Dày đặc</string>
     <string name="settings_poster_width_large">Lớn</string>
     <string name="settings_poster_width_standard">Tiêu chuẩn</string>
-    <!-- Custom Poster URL -->
     <string name="settings_custom_poster_title">NGUỒN POSTER TÙY CHỈNH</string>
     <string name="settings_custom_poster_description">Cung cấp mẫu URL poster từ một dịch vụ bên ngoài. Nếu một biến giữ chỗ không có giá trị cho tiêu đề cụ thể, poster gốc sẽ được sử dụng thay thế.</string>
     <string name="settings_custom_poster_placeholder">https://example.com/poster?id={id}&amp;id_type={id_type}&amp;type={type}</string>
@@ -802,7 +801,6 @@
     <string name="settings_custom_poster_none">Chưa thiết lập mẫu</string>
     <string name="settings_custom_poster_save">Lưu</string>
     <string name="settings_custom_poster_clear">Xóa</string>
-    <!-- Custom Poster URL - Screen Toggles -->
     <string name="settings_custom_poster_apply_to">Áp dụng poster tùy chỉnh cho</string>
     <string name="settings_custom_poster_screen_home">Trang chủ</string>
     <string name="settings_custom_poster_screen_continue_watching">Tiếp tục xem</string>
@@ -1575,10 +1573,6 @@
     <string name="detail_more_like_this_powered_by_trakt">Cung cấp bởi Trakt</string>
     <string name="detail_more_like_this_powered_by_simkl">Cung cấp bởi Simkl</string>
     <string name="details_seasons">Các mùa</string>
-    <plurals name="details_season_count">
-        <item quantity="one">%1$d Mùa</item>
-        <item quantity="other">%1$d Mùa</item>
-    </plurals>
     <string name="details_series_missing_numbers">Tiện ích này đã trả về video cho loạt phim, nhưng không có video nào bao gồm số mùa hoặc số tập.</string>
     <string name="details_series_no_metadata">Tiện ích này không cung cấp siêu dữ liệu tập phim cho loạt phim này.</string>
     <string name="details_series_unpublished">Các tập phim vẫn chưa được cập nhật bởi tiện ích này.</string>
@@ -1846,7 +1840,6 @@
     <string name="trakt_sign_in_complete_failed">Không thể hoàn tất đăng nhập Trakt</string>
     <string name="trakt_user_fallback">Người dùng Trakt</string>
     <string name="trakt_watchlist">Danh sách theo dõi</string>
-    <!-- Trakt library sync errors -->
     <string name="trakt_error_authorization_expired">Quyền truy cập Trakt đã hết hạn</string>
     <string name="trakt_error_list_not_found">Không tìm thấy danh sách Trakt</string>
     <string name="trakt_error_list_limit_reached">Đã đạt giới hạn danh sách Trakt</string>
@@ -2044,12 +2037,9 @@
     <string name="unit_bytes_kb">KB</string>
     <string name="unit_bytes_mb">MB</string>
     <string name="unit_bytes_gb">GB</string>
-    <!-- PlayerControls a11y -->
     <string name="player_action_submit_intro">Gửi mốc Giới thiệu</string>
     <string name="player_action_video_settings">Cài đặt video</string>
-    <!-- CloudLibrary -->
     <string name="cloud_library_provider_unavailable">Thư viện đám mây không có sẵn cho %1$s</string>
-    <!-- Player iOS video settings modal -->
     <string name="player_video_settings_title">Video</string>
     <string name="player_video_settings_reset_tuning">Đặt lại tinh chỉnh</string>
     <string name="player_video_settings_output_preset">Mẫu đầu ra</string>
@@ -2064,7 +2054,6 @@
     <string name="player_video_settings_contrast">Độ tương phản</string>
     <string name="player_video_settings_saturation">Độ bão hòa</string>
     <string name="player_video_settings_gamma">Gamma</string>
-    <!-- iOS video output presets -->
     <string name="player_ios_preset_native_edr_label">EDR gốc</string>
     <string name="player_ios_preset_native_edr_desc">Tốt nhất cho iPhone và iPad có hỗ trợ HDR</string>
     <string name="player_ios_preset_sdr_tone_mapped_label">Ánh xạ tông màu sang SDR</string>
@@ -2074,7 +2063,6 @@
     <string name="player_ios_preset_custom_label">Tuỳ chỉnh</string>
     <string name="player_ios_preset_custom_desc">Sử dụng các giá trị nâng cao bên dưới</string>
     <string name="player_ios_hardware_decoder_off">Tắt</string>
-    <!-- Playback settings iOS video output -->
     <string name="settings_playback_ios_video_output">ĐẦU RA VIDEO TRÊN iOS</string>
     <string name="settings_playback_ios_hardware_decoder">Bộ giải mã phần cứng</string>
     <string name="settings_playback_ios_extended_dynamic_range">Dải tương phản động mở rộng</string>
@@ -2083,13 +2071,11 @@
     <string name="settings_playback_ios_display_color_hint_desc">Để mpv tự động hướng tới không gian màu của màn hình đang hoạt động theo mặc định</string>
     <string name="settings_playback_ios_target_primaries">Không gian màu mục tiêu</string>
     <string name="settings_playback_ios_target_transfer">Hàm truyền mục tiêu</string>
-    <!-- Playback settings iOS audio output -->
     <string name="settings_playback_ios_audio_output_section">ĐẦU RA ÂM THANH TRÊN iOS</string>
     <string name="settings_playback_ios_audio_output">Đầu ra âm thanh</string>
     <string name="settings_playback_ios_audio_output_auto_desc">Dùng AudioUnit khi đầu ra AVFoundation tạm thời bị tắt.</string>
     <string name="settings_playback_ios_audio_output_avfoundation_desc">Hỗ trợ thử nghiệm cho Âm thanh Không gian và đầu ra đa kênh.</string>
     <string name="settings_playback_ios_audio_output_audiounit_desc">Dùng đầu ra AudioUnit cũ</string>
-    <!-- Debrid Result Management section -->
     <string name="settings_debrid_section_result_management">QUẢN LÝ KẾT QUẢ</string>
     <string name="settings_debrid_max_results">Số kết quả tối đa</string>
     <string name="settings_debrid_max_results_desc">Giới hạn số kết quả hiển thị.</string>
@@ -2101,83 +2087,69 @@
     <string name="settings_debrid_per_quality_limit_desc">Giới hạn các kết quả BluRay, WEB-DL và REMUX bị trùng lặp sau khi sắp xếp</string>
     <string name="settings_debrid_size_range">Khoảng dung lượng</string>
     <string name="settings_debrid_size_range_desc">Lọc kết quả theo dung lượng tệp</string>
-    <!-- Debrid misc -->
     <string name="settings_debrid_learn_more">Tìm hiểu thêm</string>
     <string name="settings_debrid_template_default_format">Định dạng mặc định</string>
     <string name="settings_debrid_template_original_format">Định dạng gốc</string>
     <string name="settings_debrid_release_groups_hint">Nhập mỗi nhóm trên một dòng</string>
-    <!-- Debrid sort profiles -->
     <string name="settings_debrid_sort_original">Thứ tự ban đầu</string>
     <string name="settings_debrid_sort_best_quality">Chất lượng cao nhất trước</string>
     <string name="settings_debrid_sort_largest">Lớn nhất trước</string>
     <string name="settings_debrid_sort_smallest">Nhỏ nhất trước</string>
     <string name="settings_debrid_sort_best_audio">Âm thanh tốt nhất trước</string>
     <string name="settings_debrid_sort_language">Ngôn ngữ trước</string>
-    <!-- Debrid selection labels -->
     <string name="settings_debrid_selection_any">Tất cả</string>
     <string name="settings_debrid_selection_count">Đã chọn %1$d</string>
-    <!-- Debrid result count labels -->
     <string name="settings_debrid_results_all">Tất cả kết quả</string>
     <string name="settings_debrid_results_count">%1$d kết quả</string>
-    <!-- Debrid size range labels -->
     <string name="settings_debrid_size_up_to">Lên đến %1$dGB</string>
     <string name="settings_debrid_size_min">Từ %1$dGB trở lên</string>
     <string name="settings_debrid_size_range_value">%1$d–%2$dGB</string>
-    <!-- Debrid rule rows: resolutions -->
     <string name="settings_debrid_rule_preferred_resolutions">Độ phân giải ưu tiên</string>
     <string name="settings_debrid_rule_preferred_resolutions_desc">Ưu tiên sắp xếp các độ phân giải đã chọn theo thứ tự mặc định</string>
     <string name="settings_debrid_rule_required_resolutions">Độ phân giải bắt buộc</string>
     <string name="settings_debrid_rule_required_resolutions_desc">Chỉ hiển thị các độ phân giải đã chọn</string>
     <string name="settings_debrid_rule_excluded_resolutions">Độ phân giải loại trừ</string>
     <string name="settings_debrid_rule_excluded_resolutions_desc">Ẩn các độ phân giải đã chọn</string>
-    <!-- Debrid rule rows: qualities -->
     <string name="settings_debrid_rule_preferred_qualities">Chất lượng ưu tiên</string>
     <string name="settings_debrid_rule_preferred_qualities_desc">Ưu tiên sắp xếp các chất lượng đã chọn theo thứ tự mặc định</string>
     <string name="settings_debrid_rule_required_qualities">Chất lượng bắt buộc</string>
     <string name="settings_debrid_rule_required_qualities_desc">Chỉ hiển thị các chất lượng đã chọn</string>
     <string name="settings_debrid_rule_excluded_qualities">Chất lượng loại trừ</string>
     <string name="settings_debrid_rule_excluded_qualities_desc">Ẩn các chất lượng đã chọn</string>
-    <!-- Debrid rule rows: visual tags -->
     <string name="settings_debrid_rule_preferred_visual_tags">Nhãn hình ảnh ưu tiên</string>
     <string name="settings_debrid_rule_preferred_visual_tags_desc">Ưu tiên sắp xếp các thẻ như Dolby Vision, HDR, 10-bit, IMAX và các thẻ tương tự</string>
     <string name="settings_debrid_rule_required_visual_tags">Nhãn hình ảnh bắt buộc</string>
     <string name="settings_debrid_rule_required_visual_tags_desc">Chỉ hiển thị kết quả có các thẻ như Dolby Vision, HDR, 10-bit, IMAX, SDR và các thẻ tương tự</string>
     <string name="settings_debrid_rule_excluded_visual_tags">Nhãn hình ảnh loại trừ</string>
     <string name="settings_debrid_rule_excluded_visual_tags_desc">Ẩn các kết quả có thẻ như Dolby Vision, HDR, 10-bit, 3D và các thẻ tương tự</string>
-    <!-- Debrid rule rows: audio tags -->
     <string name="settings_debrid_rule_preferred_audio_tags">Nhãn âm thanh ưu tiên</string>
     <string name="settings_debrid_rule_preferred_audio_tags_desc">Ưu tiên sắp xếp các thẻ như Atmos, TrueHD, DTS, AAC và các thẻ tương tự</string>
     <string name="settings_debrid_rule_required_audio_tags">Nhãn âm thanh bắt buộc</string>
     <string name="settings_debrid_rule_required_audio_tags_desc">Chỉ hiển thị kết quả có các thẻ như Atmos, TrueHD, DTS và AAC và các thẻ tương tự</string>
     <string name="settings_debrid_rule_excluded_audio_tags">Nhãn âm thanh loại trừ</string>
     <string name="settings_debrid_rule_excluded_audio_tags_desc">Ẩn các kết quả có thẻ âm thanh đã chọn</string>
-    <!-- Debrid rule rows: channels -->
     <string name="settings_debrid_rule_preferred_channels">Kênh ưu tiên</string>
     <string name="settings_debrid_rule_preferred_channels_desc">Ưu tiên sắp xếp các kênh âm thanh đã chọn</string>
     <string name="settings_debrid_rule_required_channels">Kênh bắt buộc</string>
     <string name="settings_debrid_rule_required_channels_desc">Chỉ hiển thị các kênh âm thanh đã chọn</string>
     <string name="settings_debrid_rule_excluded_channels">Kênh loại trừ</string>
     <string name="settings_debrid_rule_excluded_channels_desc">Ẩn các kênh âm thanh đã chọn</string>
-    <!-- Debrid rule rows: encodes -->
     <string name="settings_debrid_rule_preferred_encodes">Bản mã hóa ưu tiên</string>
     <string name="settings_debrid_rule_preferred_encodes_desc">Ưu tiên sắp xếp các bản mã hóa như AV1, HEVC, AVC và các bản mã hóa tương tự</string>
     <string name="settings_debrid_rule_required_encodes">Bản mã hóa bắt buộc</string>
     <string name="settings_debrid_rule_required_encodes_desc">Chỉ hiển thị kết quả có bản mã hóa như AV1, HEVC và AVC và các bản mã hóa tương tự</string>
     <string name="settings_debrid_rule_excluded_encodes">Bản mã hóa loại trừ</string>
     <string name="settings_debrid_rule_excluded_encodes_desc">Ẩn các bản mã hóa đã chọn</string>
-    <!-- Debrid rule rows: languages -->
     <string name="settings_debrid_rule_preferred_languages">Ngôn ngữ ưu tiên</string>
     <string name="settings_debrid_rule_preferred_languages_desc">Ưu tiên sắp xếp các ngôn ngữ âm thanh đã chọn</string>
     <string name="settings_debrid_rule_required_languages">Ngôn ngữ bắt buộc</string>
     <string name="settings_debrid_rule_required_languages_desc">Chỉ hiển thị kết quả có các ngôn ngữ đã chọn</string>
     <string name="settings_debrid_rule_excluded_languages">Ngôn ngữ loại trừ</string>
     <string name="settings_debrid_rule_excluded_languages_desc">Ẩn các kết quả nếu tất cả ngôn ngữ đều thuộc danh sách loại trừ</string>
-    <!-- Debrid rule rows: release groups -->
     <string name="settings_debrid_rule_required_release_groups">Nhóm phát hành bắt buộc</string>
     <string name="settings_debrid_rule_required_release_groups_desc">Chỉ hiển thị các nhóm phát hành đã chọn</string>
     <string name="settings_debrid_rule_excluded_release_groups">Nhóm phát hành loại trừ</string>
     <string name="settings_debrid_rule_excluded_release_groups_desc">Ẩn các nhóm phát hành đã chọn</string>
-    <!-- Submit intro/recap/outro dialog -->
     <string name="submit_intro_title">Gửi mốc thời gian</string>
     <string name="submit_intro_segment_type">LOẠI PHÂN ĐOẠN</string>
     <string name="submit_intro_segment_intro">Giới thiệu</string>
@@ -2187,31 +2159,24 @@
     <string name="submit_intro_end_time">THỜI ĐIỂM KẾT THÚC (MM:SS)</string>
     <string name="submit_intro_submit">Gửi</string>
     <string name="submit_intro_capture">Đánh dấu</string>
-    <!-- iOS advanced playback -->
     <string name="settings_playback_ios_hw_decoder_dialog">Bộ giải mã phần cứng</string>
     <string name="settings_playback_ios_audio_output_dialog">Đầu ra âm thanh</string>
     <string name="settings_playback_ios_target_primaries_dialog">Không gian màu mục tiêu</string>
     <string name="settings_playback_ios_target_transfer_dialog">Hàm truyền mục tiêu</string>
-    <!-- Collection editor -->
     <string name="collections_editor_resolved_trakt_list">Danh sách Trakt đã xác thực</string>
     <string name="collections_editor_tmdb_discover">Khám phá TMDB</string>
     <string name="collections_editor_watch_region_placeholder">US, KR, JP, IN</string>
-    <!-- Collection editor error messages -->
     <string name="collections_editor_trakt_input_required">Nhập tên, URL hoặc ID danh sách Trakt</string>
     <string name="collections_editor_tmdb_invalid_id_error">Nhập ID hoặc URL TMDB hợp lệ</string>
     <string name="collections_editor_tmdb_load_error">Không thể tải nguồn TMDB</string>
     <string name="collections_editor_trakt_id_url_required">Nhập ID hoặc URL danh sách Trakt</string>
     <string name="collections_editor_trakt_load_error">Không thể tải danh sách Trakt</string>
-    <!-- Collection editor TMDB country chips -->
     <string name="collections_editor_tmdb_country_ca">Canada</string>
     <string name="collections_editor_tmdb_country_au">Úc</string>
     <string name="collections_editor_tmdb_country_de">Đức</string>
-    <!-- Collection editor media type suffixes (appended to source titles) -->
     <string name="collections_editor_media_movies_suffix">Phim</string>
     <string name="collections_editor_media_series_suffix">Loạt phim</string>
-    <!-- Cloud library -->
     <string name="cloud_library_playback_disabled">Thư viện đám mây đang tắt</string>
-    <!-- IntroDB settings -->
     <string name="settings_playback_introdb_invalid_api_key">Mã khóa API không hợp lệ hoặc không thể kết nối</string>
     <string name="addons_manifest_missing_field">Tệp kê khai thiếu \"%1$s\"</string>
     <string name="collections_editor_tmdb_collection_title_format">Bộ sưu tập TMDB %1$s</string>
@@ -2335,24 +2300,14 @@
     <string name="updates_channel_beta_description">Các bản cập nhật sớm có thể chứa lỗi, làm hỏng một số tính năng hoặc hoạt động không như mong đợi.</string>
     <string name="updates_waiting_for_stable">Bạn sẽ nhận được bản phát hành ổn định tiếp theo khi có sẵn</string>
     <string name="updates_release_missing_title">Bản phát hành không có tên hoặc thẻ</string>
-    <!-- Continue Watching air date display -->
     <string name="cw_airs_date">Phát sóng %1$s</string>
     <string name="cw_airs_today">Phát sóng hôm nay</string>
     <string name="cw_airs_tomorrow">Phát sóng ngày mai</string>
-    <plurals name="cw_airs_in_days">
-        <item quantity="one">Phát sóng sau %1$d ngày</item>
-        <item quantity="other">Phát sóng sau %1$d ngày</item>
-    </plurals>
     <string name="cw_airs_date_short">%1$s</string>
     <string name="cw_airs_today_short">Hôm nay</string>
     <string name="cw_airs_tomorrow_short">Ngày mai</string>
-    <plurals name="cw_airs_in_days_short">
-        <item quantity="one">Sau %1$d ngày</item>
-        <item quantity="other">Sau %1$d ngày</item>
-    </plurals>
     <string name="cw_new_episode">Tập mới</string>
     <string name="cw_new_season">Mùa mới</string>
-    <!-- Pass 4 — platform stubs and dynamic title fallbacks -->
     <string name="collections_editor_trakt_list_title_format">Danh sách Trakt %1$s</string>
     <string name="external_player_android_system">Trình phát mặc định của Android</string>
     <string name="p2p_consent_title">Phát luồng P2P</string>
@@ -2396,7 +2351,6 @@
     <string name="player_torrent_loading_status">%1$s đã tải xuống · %2$s · %3$s</string>
     <string name="player_error_failed_start_torrent">Không thể khởi động torrent: %1$s</string>
     <string name="player_error_torrent">Lỗi torrent: %1$s</string>
-    <!-- Person & TMDB entity detail (pass7) -->
     <string name="person_detail_born">Ngày sinh</string>
     <string name="person_detail_place_of_birth">Nơi sinh</string>
     <string name="person_detail_credits">Danh đề</string>
@@ -2407,10 +2361,6 @@
     <string name="entity_browse_about">Giới thiệu</string>
     <string name="player_external_loading_subtitles">Đang tải xuống phụ đề từ tiện ích...</string>
     <string name="player_external_downloading_subtitles">Đang tải xuống phụ đề...</string>
-    <plurals name="entity_browse_title_count">
-        <item quantity="one">%d tiêu đề</item>
-        <item quantity="other">%d tiêu đề</item>
-    </plurals>
     <string name="settings_appearance_low_end_mode">Tắt toàn bộ hiệu ứng / Máy yếu</string>
     <string name="settings_appearance_low_end_mode_description">Tắt toàn bộ animation, hiệu ứng hạt bụi tan biến, shimmer và đổ bóng 3D để tối ưu độ mượt tối đa cho máy yếu.</string>
     <string name="compose_player_font">Phông chữ</string>
@@ -2442,7 +2392,6 @@
     <string name="torrserver_check_gst">Kiểm tra GStreamer</string>
     <string name="torrserver_select_file">Chọn tệp trong Torrent</string>
     <string name="torrserver_files_title">Danh sách tệp Torrent</string>
-    <!-- Subtitle Custom Font & Outline -->
     <string name="settings_playback_subtitle_font">Phông chữ phụ đề</string>
     <string name="settings_playback_subtitle_outline_width">Độ dày viền phụ đề</string>
     <string name="compose_player_outline_width">Độ dày viền</string>
@@ -2460,7 +2409,6 @@
     <string name="sub_font_custom_pick">+ Thêm phông chữ từ bộ nhớ…</string>
     <string name="sub_font_custom_change">Đổi phông chữ tùy chỉnh…</string>
     <string name="sub_font_custom_remove">Đặt lại phông mặc định</string>
-    <!-- Live TV -->
     <string name="compose_nav_live_tv">TV</string>
     <string name="compose_settings_page_live_tv">Truyền hình (Live TV)</string>
     <string name="settings_integrations_live_tv_description">Thêm danh sách phát M3U để xem các kênh truyền hình trực tiếp.</string>
@@ -2546,7 +2494,7 @@
     <string name="layout_ratings_show">Hiển thị</string>
     <string name="layout_ratings_hide">Ẩn</string>
     <string name="layout_ratings_hide_unwatched">Ẩn mục Chưa xem</string>
-     <string name="settings_playback_legacy_layout">Bố cục kiểu cũ</string>
+    <string name="settings_playback_legacy_layout">Bố cục kiểu cũ</string>
     <string name="settings_playback_legacy_layout_description">Sử dụng các nút điều khiển gốc của trình phát.</string>
     <string name="compose_player_episode_code">M%1$d T%2$d</string>
     <string name="compose_player_more_actions">Thêm nút điều khiển</string>
@@ -2698,4 +2646,24 @@
     <string name="player_error_stream_blocked">Nguồn phát bị chặn hoặc bị hạn chế. Vui lòng thử một nguồn khác.</string>
     <string name="player_error_source_invalid_content">Lỗi nguồn: Nguồn phát trả về nội dung không hợp lệ hoặc không thể phát. Liên kết có thể đã hết hạn hoặc máy chủ đã trả về trang lỗi thay vì video.\n\nVui lòng thử một nguồn khác. [%1$s]</string>
     <string name="player_error_unsupported_format">Luồng phát này sử dụng định dạng mà thiết bị của bạn có thể không hỗ trợ. Vui lòng thử một nguồn khác. [%1$s]</string>
+    <string name="addons_tracking_consent_body">%1$s là một tiện ích theo dõi. Nuvio sẽ gửi cho tiện ích này hoạt động của bạn: nội dung bạn phát, tạm dừng và dừng cùng với vị trí phát lại, nội dung bạn thêm vào hoặc xóa khỏi thư viện, và nội dung bạn đánh dấu là đã xem hoặc chưa xem. Dữ liệu này rời khỏi Nuvio và được xử lý bởi nhà phát triển tiện ích cùng dịch vụ mà nó kết nối.</string>
+    <string name="addons_tracking_consent_checkbox">Tôi đồng ý chia sẻ hoạt động xem và thư viện của mình với tiện ích này</string>
+    <string name="addons_tracking_consent_title">Tiện ích theo dõi</string>
+    <string name="downloads_delete_message">Thao tác này giải phóng %1$s trên thiết bị này.</string>
+    <string name="downloads_delete_title">Xóa %1$s?</string>
+    <string name="downloads_downloading_count">%1$d đang tải xuống</string>
+    <string name="downloads_empty_message">Nhấn giữ một luồng phát và chọn Tải tệp xuống để xem ngoại tuyến.</string>
+    <string name="downloads_pause_all">Tạm dừng tất cả</string>
+    <string name="downloads_resume_all">Tiếp tục tất cả</string>
+    <string name="downloads_section_downloaded">Đã tải xuống</string>
+    <string name="downloads_speed">%1$s/giây</string>
+    <string name="downloads_watched_count">%1$d đã xem</string>
+    <string name="library_filter_genre">Thể loại</string>
+    <string name="library_filter_watched">Đã xem</string>
+    <string name="library_filter_year">Năm</string>
+    <string name="library_type_all">Tất cả</string>
+    <string name="library_watched_filter_all">Tất cả</string>
+    <string name="library_watched_filter_unwatched">Chưa xem</string>
+    <string name="library_watched_filter_watched">Đã xem</string>
+    <string name="subtitle_outline_width">Độ dày viền</string>
 </resources>

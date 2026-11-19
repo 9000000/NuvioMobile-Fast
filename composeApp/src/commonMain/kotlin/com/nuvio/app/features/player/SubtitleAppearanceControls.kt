@@ -97,9 +97,9 @@ internal fun SubtitleAppearanceControls(
                 onStyleChanged(style.copy(outlineColor = it))
             }
             SubtitleValueControl(
-                stringResource(Res.string.compose_player_outline_width),
+                stringResource(Res.string.subtitle_outline_width),
                 style.outlineWidth,
-                1..10,
+                subtitleOutlineWidthRange,
                 1,
             ) { onStyleChanged(style.copy(outlineWidth = it)) }
         }

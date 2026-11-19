@@ -118,10 +118,10 @@ internal fun SubtitleAppearanceSettings(
                     enabled = enabled, isTablet = isTablet, onClick = { colorTarget = "outline" },
                 )
                 SettingsSliderRow(
-                    title = stringResource(Res.string.settings_playback_subtitle_outline_width),
+                    title = stringResource(Res.string.subtitle_outline_width),
                     value = style.outlineWidth,
                     valueText = { it.toString() },
-                    valueRange = 1..10,
+                    valueRange = subtitleOutlineWidthRange,
                     step = 1,
                     isTablet = isTablet,
                     enabled = enabled,
