@@ -6,6 +6,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import com.nuvio.app.features.player.tts.SubtitleTtsCoordinator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
@@ -213,6 +214,7 @@ internal fun PlayerScreenRuntime.seekBy(offsetMs: Long) {
     lastManualSkipSeekPositions = fromMs to targetMs
     pendingSeekTarget = targetMs to TimeSource.Monotonic.markNow()
     if (isPartySynced) playerController?.seekTo(targetMs) else playerController?.seekBy(offsetMs)
+    SubtitleTtsCoordinator.onSeek()
     scheduleProgressSyncAfterSeek()
     publishPartyPlayback(positionMs = targetMs)
     controlsVisible = true
@@ -248,6 +250,7 @@ internal fun PlayerScreenRuntime.handleDoubleTapSeek(direction: PlayerSeekDirect
     accumulatedSeekState = nextState
     lastManualSkipSeekPositions = currentPositionMs to targetPositionMs
     playerController?.seekTo(targetPositionMs)
+    SubtitleTtsCoordinator.onSeek()
     scheduleProgressSyncAfterSeek()
     publishPartyPlayback(positionMs = targetPositionMs)
     showSeekFeedback(direction, nextState.amountMs)
@@ -371,6 +374,7 @@ internal fun PlayerScreenRuntime.rememberSurfaceGestureCallbacks(): PlayerSurfac
             }
             lastManualSkipSeekPositions = playbackSnapshot.positionMs to targetPositionMs
             playerController?.seekTo(targetPositionMs)
+            SubtitleTtsCoordinator.onSeek()
             scheduleProgressSyncAfterSeek()
             publishPartyPlayback(positionMs = targetPositionMs)
         },

@@ -1,0 +1,9 @@
+
+Thông tin mạng
+DNS MuMu :  192.168.7.206
+DNS máy tính :  192.168.7.206
+Địa chỉ MAC Rom :  08:00:5a:fe:c8:2e
+Cổng gỡ lỗi ADB :  5557,16416
+Địa chỉ IP xuất của MuMu :  10.0.2.15
+Địa chỉ IP xuất máy tính :  171.237.34.230
+

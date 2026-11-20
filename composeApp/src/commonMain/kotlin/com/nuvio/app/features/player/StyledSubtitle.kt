@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nuvio.app.features.player.tts.SubtitleTtsCoordinator
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -38,8 +41,9 @@ private const val SIDE_SUBTITLE_INSET_FRACTION = 0.05f
 
 @Composable
 internal fun StyledSubtitleOverlay(cues: StyledSubtitleCues, style: SubtitleStyleState, modifier: Modifier = Modifier) {
+    val ttsSettings by SubtitleTtsCoordinator.settings.collectAsStateWithLifecycle()
     val fontFamily = rememberSubtitleFontFamily(style.appearance.fontId)
-    if (cues.isEmpty) return
+    if (cues.isEmpty || ttsSettings.shouldHideVisualSubtitles) return
     BoxWithConstraints(modifier.fillMaxSize()) {
         val scale = (maxHeight / 360.dp).coerceAtMost(1f)
         val bottomInset = maxHeight * (0.0533f + style.bottomOffset.coerceIn(0, 200) / 1000f)

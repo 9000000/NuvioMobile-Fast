@@ -14,6 +14,7 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -39,6 +40,7 @@ import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
@@ -75,26 +77,40 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.SubtitleView
 import androidx.media3.ui.CaptionStyleCompat
+import com.nuvio.app.features.addons.httpGetTextWithHeaders
 import com.nuvio.app.features.autosync.AutoSyncExtractorsFactory
+import com.nuvio.app.features.autosync.AutoSyncLibassSubtitles
 import com.nuvio.app.features.autosync.AutoSyncPreferencesRepository
+import com.nuvio.app.features.autosync.AutoSyncSyncedSubtitle
+import com.nuvio.app.features.autosync.EmbeddedSubtitleCueStore
 import com.nuvio.app.features.autosync.LIBMPV_AUTOSYNC_FILE_PREFIX
+import com.nuvio.app.features.autosync.ReferenceTrack
 import com.nuvio.app.features.autosync.rememberAutoSyncCoordinator
 import com.nuvio.app.features.autosync.rememberLibmpvAutoSyncCoordinator
+import com.nuvio.app.features.player.tts.SubtitleCuePlaybackContext
+import com.nuvio.app.features.player.tts.SubtitleTtsCoordinator
+import com.nuvio.app.features.player.tts.SubtitleTtsTextCleaner
+import com.nuvio.app.features.player.tts.TimedSpeechCue
 import com.nuvio.app.R
 import com.nuvio.app.features.streams.normalizeStreamType
 import `is`.xyz.mpv.MPV
 import `is`.xyz.mpv.MPVNode
 import `is`.xyz.mpv.Utils
+import com.nuvio.tv.libass.media.AssHandler
 import com.nuvio.tv.libass.media.widget.AssSubtitleSurfaceView
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URI
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
@@ -102,6 +118,10 @@ import java.util.concurrent.atomic.AtomicReference
 
 private const val TAG = "NuvioPlayer"
 private const val PLAYER_DIAGNOSTIC_TAG = "NuvioPlayerDiag"
+private const val LIBASS_TTS_POLL_INTERVAL_MS = 100L
+private const val ASS_TRACK_ID_PREFIX_SCAN_LIMIT = 4
+private const val MS_PER_SECOND = 1_000.0
+private const val US_PER_MS = 1_000L
 
 private class PlaybackDiagnostics {
     var prepareStartedAtMs: Long = 0L
@@ -297,6 +317,14 @@ private fun ExoPlayerSurface(
     var currentSubtitleStyle by remember { mutableStateOf(SubtitleStyleState.DEFAULT) }
     val subtitlePresenter = remember(playerSourceKey) { SubtitleCuePresenter { currentSubtitleStyle } }
     var sidecarControllerRef by remember { mutableStateOf<SidecarSubtitleController?>(null) }
+    val exoPlayerRef = remember(playerSourceKey) { AtomicReference<ExoPlayer?>(null) }
+    var attachedExternalSubtitleUrl by remember(playerSourceKey) { mutableStateOf<String?>(null) }
+    var parsedExternalSubtitleTimeline by remember(playerSourceKey) {
+        mutableStateOf<List<SubtitleSyncCue>>(emptyList())
+    }
+    val parsedExternalSubtitleTimelineRef = remember(playerSourceKey) {
+        AtomicReference<List<SubtitleSyncCue>>(emptyList())
+    }
     val subtitleStyleGuard = remember { SubtitleStyleGuard() }
     var decoderPriorityOverride by remember(playerSourceKey) { mutableStateOf<Int?>(null) }
     var fallbackStartPositionMs by remember(playerSourceKey) { mutableStateOf<Long?>(null) }
@@ -341,9 +369,13 @@ private fun ExoPlayerSurface(
         DefaultExtractorsFactory()
             .setTsExtractorFlags(DefaultTsPayloadReaderFactory.FLAG_ENABLE_HDMV_DTS_AUDIO_STREAMS)
             .setTsExtractorTimestampSearchBytes(1500 * TsExtractor.TS_PACKET_SIZE)
-            .let { factory -> // AutoSync hook: no observation while disabled.
+            .let { factory -> // AutoSync/TTS hook: no observation while both are disabled.
                 AutoSyncPreferencesRepository.ensureLoaded()
-                if (AutoSyncPreferencesRepository.preferredSubtitleAutoSyncOnStart.value) {
+                SubtitleTtsCoordinator.ensureLoaded()
+                if (
+                    AutoSyncPreferencesRepository.preferredSubtitleAutoSyncOnStart.value ||
+                    SubtitleTtsCoordinator.settings.value.enabled
+                ) {
                     AutoSyncExtractorsFactory(factory, sourceUrl)
                 } else factory
             }
@@ -487,12 +519,39 @@ private fun ExoPlayerSurface(
                 latestExternalSubtitleMimeType.value == MimeTypes.TEXT_VTT
             },
             shouldStripSdhProvider = { currentSubtitleStyle.stripSdh },
-            presentCues = { cues ->
-                val format = playerViewRef?.player?.currentTracks?.groups
-                    ?.firstOrNull { it.type == C.TRACK_TYPE_TEXT && it.isSelected }
-                    ?.getTrackFormat(0)
-                if (sidecarControllerRef?.isSidecarActive() == true) emptyList()
-                else subtitlePresenter.present(cues, format?.sampleMimeType != MimeTypes.TEXT_SSA && format?.codecs != MimeTypes.TEXT_SSA)
+            presentCues = { cues, presentationTimeUs ->
+                if (sidecarControllerRef?.isSidecarActive() == true) {
+                    emptyList()
+                } else {
+                    val activePlayer = exoPlayerRef.get() ?: playerViewRef?.player
+                    val onMainThread = activePlayer != null &&
+                        Looper.myLooper() == activePlayer.applicationLooper
+                    val format = if (onMainThread) {
+                        activePlayer.currentTracks.groups
+                            .firstOrNull { it.type == C.TRACK_TYPE_TEXT && it.isSelected }
+                            ?.getTrackFormat(0)
+                    } else {
+                        null
+                    }
+                    val canStyle = format?.sampleMimeType != MimeTypes.TEXT_SSA &&
+                        format?.codecs != MimeTypes.TEXT_SSA
+                    val timingContext = if (onMainThread && SubtitleTtsCoordinator.settings.value.enabled) {
+                        buildExoSubtitleTimingContext(
+                            cues = cues,
+                            presentationTimeUs = presentationTimeUs,
+                            playbackSpeed = activePlayer.playbackParameters.speed,
+                            playerPositionMs = activePlayer.currentPosition.coerceAtLeast(0L),
+                            subtitleDelayMs = latestSubtitleDelayMs.value,
+                            audioDelayUs = audioDelayUs.get(),
+                            sourceUrl = sourceUrl,
+                            selectedFormat = format,
+                            externalTimeline = parsedExternalSubtitleTimelineRef.get(),
+                        )
+                    } else {
+                        null
+                    }
+                    subtitlePresenter.present(cues, canStyle, timingContext)
+                }
             },
             videoBoundsFractionProvider = {
                 playerViewRef?.videoBoundsFraction(latestVideoAspectRatio.value)
@@ -608,6 +667,7 @@ private fun ExoPlayerSurface(
             hasActiveSubtitle = false,
             useCustomSubtitles = false,
         )
+        exoPlayerRef.set(player)
         player
     }
 
@@ -694,6 +754,13 @@ private fun ExoPlayerSurface(
             getSubtitleDelayMs = { latestSubtitleDelayMs.value },
             getAudioDelayUs = audioDelayUs::get,
             presentCues = { cues -> subtitlePresenter.present(cues, sidecarControllerRef?.subtitleMimeType != MimeTypes.TEXT_SSA) },
+            presentTimedCues = { cues, timingContext ->
+                subtitlePresenter.present(
+                    cues = cues,
+                    canStyle = sidecarControllerRef?.subtitleMimeType != MimeTypes.TEXT_SSA,
+                    timingContext = timingContext,
+                )
+            },
         ).also { sidecarControllerRef = it }
     }
 
@@ -981,6 +1048,7 @@ private fun ExoPlayerSurface(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             playerViewRef?.releaseLibassOverlay()
+            if (exoPlayerRef.get() === exoPlayer) exoPlayerRef.set(null)
             exoPlayer.releaseWithAssSupportCompat()
             if (VodCache.playheadBytesProvider != null) {
                 VodCache.playheadBytesProvider = null
@@ -1066,6 +1134,10 @@ private fun ExoPlayerSurface(
                     exoPlayer.setPlaybackSpeed(speed)
                 }
 
+                override fun setPlayerVolume(volume: Float) {
+                    exoPlayer.volume = volume.coerceIn(0f, 1f)
+                }
+
                 override fun updateNowPlayingMetadata(info: PlayerNowPlayingInfo) {
                     nowPlayingController.updateMetadata(info)
                 }
@@ -1119,6 +1191,9 @@ private fun ExoPlayerSurface(
                 override fun selectSubtitleTrack(index: Int) {
                     Log.d(TAG, "selectSubtitleTrack: index=$index")
                     sidecarController.stopSidecarAddonSubtitle(clearView = true)
+                    attachedExternalSubtitleUrl = null
+                    parsedExternalSubtitleTimeline = emptyList()
+                    parsedExternalSubtitleTimelineRef.set(emptyList())
                     if (index < 0) {
                         Log.d(TAG, "selectSubtitleTrack: disabling text tracks")
                         exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
@@ -1141,6 +1216,9 @@ private fun ExoPlayerSurface(
                     subtitleSelectionJob?.cancel()
                     if (sidecarController.canAttachAddonSubtitleViaSidecar(url, useLibass)) {
                         Log.d(TAG, "setSubtitleUri: using buffer-preserving sidecar for url=${url.redactedForLogs()}")
+                        attachedExternalSubtitleUrl = null
+                        parsedExternalSubtitleTimeline = emptyList()
+                        parsedExternalSubtitleTimelineRef.set(emptyList())
                         val headers = externalSubtitles.firstOrNull { it.url == url }?.headers.orEmpty()
                         val attached = sidecarController.startSidecarAddonSubtitle(
                             url = url,
@@ -1156,6 +1234,9 @@ private fun ExoPlayerSurface(
                             return
                         }
                     }
+                    attachedExternalSubtitleUrl = url
+                    parsedExternalSubtitleTimeline = emptyList()
+                    parsedExternalSubtitleTimelineRef.set(emptyList())
                     subtitleSelectionJob = coroutineScope.launch {
                         val currentPosition = exoPlayer.currentPosition
                         val wasPlaying = exoPlayer.isPlaying
@@ -1202,6 +1283,9 @@ private fun ExoPlayerSurface(
                     sidecarController.stopSidecarAddonSubtitle(clearView = true)
                     selectedExternalSubtitleMimeType = null
                     attachedAddonSubtitleConfig = null
+                    attachedExternalSubtitleUrl = null
+                    parsedExternalSubtitleTimeline = emptyList()
+                    parsedExternalSubtitleTimelineRef.set(emptyList())
                     val currentPosition = exoPlayer.currentPosition
                     val wasPlaying = exoPlayer.isPlaying
                     val currentMediaItem = exoPlayer.currentMediaItem ?: return
@@ -1225,6 +1309,9 @@ private fun ExoPlayerSurface(
                     sidecarController.stopSidecarAddonSubtitle(clearView = true)
                     selectedExternalSubtitleMimeType = null
                     attachedAddonSubtitleConfig = null
+                    attachedExternalSubtitleUrl = null
+                    parsedExternalSubtitleTimeline = emptyList()
+                    parsedExternalSubtitleTimelineRef.set(emptyList())
                     val currentPosition = exoPlayer.currentPosition
                     val wasPlaying = exoPlayer.isPlaying
                     val currentMediaItem = exoPlayer.currentMediaItem ?: return
@@ -1361,6 +1448,85 @@ private fun ExoPlayerSurface(
                 }
             },
         )
+        val ttsSettings by SubtitleTtsCoordinator.settings.collectAsStateWithLifecycle()
+        val syncedSubtitleUrl by AutoSyncSyncedSubtitle.url.collectAsStateWithLifecycle()
+        LaunchedEffect(playerViewRef, ttsSettings.shouldHideVisualSubtitles) {
+            playerViewRef?.subtitleView?.alpha = if (ttsSettings.shouldHideVisualSubtitles) 0f else 1f
+            playerViewRef?.subtitleView?.setCues(subtitlePresenter.refresh())
+        }
+        LaunchedEffect(attachedExternalSubtitleUrl, ttsSettings.enabled, syncedSubtitleUrl) {
+            val url = attachedExternalSubtitleUrl
+            if (url == null || !ttsSettings.enabled) {
+                parsedExternalSubtitleTimeline = emptyList()
+                parsedExternalSubtitleTimelineRef.set(emptyList())
+                return@LaunchedEffect
+            }
+            val parsed = withContext(Dispatchers.IO) {
+                loadAndParseExternalSubtitleTimeline(
+                    context = context,
+                    url = url,
+                    headers = externalSubtitles.firstOrNull { it.url == url }?.headers.orEmpty(),
+                    assHandler = exoPlayer.getAssHandlerCompat(),
+                )
+            }
+            if (attachedExternalSubtitleUrl == url) {
+                parsedExternalSubtitleTimeline = parsed
+                parsedExternalSubtitleTimelineRef.set(parsed)
+            }
+        }
+        LaunchedEffect(
+            exoPlayer,
+            useLibass,
+            ttsSettings.enabled,
+            attachedAddonSubtitleConfig,
+            parsedExternalSubtitleTimeline,
+        ) {
+            val addonConfig = attachedAddonSubtitleConfig
+            val timeline = parsedExternalSubtitleTimeline
+            if (
+                !useLibass ||
+                !ttsSettings.enabled ||
+                addonConfig?.mimeType != MimeTypes.TEXT_SSA ||
+                timeline.isEmpty()
+            ) {
+                return@LaunchedEffect
+            }
+            var lastDispatchedSignature: String? = null
+            while (isActive) {
+                val selectedTextFormat = exoPlayer.currentTracks.groups
+                    .firstOrNull { it.type == C.TRACK_TYPE_TEXT && it.isSelected }
+                    ?.getTrackFormat(0)
+                val isAttachedAssSelected = selectedTextFormat?.isAssSubtitleFormat() == true &&
+                    (addonConfig.id == null || selectedTextFormat.id?.endsWith(addonConfig.id!!) == true)
+                if (isAttachedAssSelected && sidecarControllerRef?.isSidecarActive() != true) {
+                    val positionMs = (
+                        exoPlayer.currentPosition.coerceAtLeast(0L) +
+                            audioDelayUs.get() / US_PER_MS -
+                            latestSubtitleDelayMs.value.toLong()
+                        ).coerceAtLeast(0L)
+                    val activeCues = findActiveSyncCuesAtPosition(timeline, positionMs)
+                    val rawText = activeCues.joinToString("\n") { it.text }.trim()
+                    val signature = if (activeCues.isEmpty()) "" else "${activeCues.first().startTimeMs}:$rawText"
+                    if (signature != lastDispatchedSignature) {
+                        lastDispatchedSignature = signature
+                        val timingContext = if (rawText.isNotEmpty()) {
+                            extractTimingContextFromSyncCues(
+                                timeline = timeline,
+                                currentRawText = rawText,
+                                playbackSpeed = exoPlayer.playbackParameters.speed,
+                                positionMs = positionMs,
+                                preferredStartMs = activeCues.minOfOrNull { it.startTimeMs },
+                                preferredEndMs = activeCues.maxOfOrNull { it.endTimeMs },
+                            )
+                        } else {
+                            null
+                        }
+                        SubtitleTtsCoordinator.onSubtitleCueChanged(rawText, timingContext)
+                    }
+                }
+                delay(LIBASS_TTS_POLL_INTERVAL_MS)
+            }
+        }
         StyledSubtitleOverlay(subtitlePresenter.cues, currentSubtitleStyle)
     }
 }
@@ -1724,9 +1890,14 @@ private fun LibmpvPlayerSurface(
             },
             onRelease = { view ->
                 if (playerViewRef === view) playerViewRef = null
+                view.disposeExternalTimelines()
                 view.releaseMpv()
             },
         )
+        val ttsSettings by SubtitleTtsCoordinator.settings.collectAsStateWithLifecycle()
+        LaunchedEffect(playerViewRef, ttsSettings.shouldHideVisualSubtitles) {
+            playerViewRef?.updateStyledSubtitle()
+        }
         playerViewRef?.let { view -> StyledSubtitleOverlay(view.subtitleCues, view.subtitleStyle) }
     }
 }
@@ -1764,18 +1935,62 @@ private class NuvioLibmpvView(
         private set
     private var appliedSubtitleStyle = SubtitleStyleState.DEFAULT
     private var styledSubtitleVisible = false
+    @Volatile
+    private var currentPlayerVolume = 1.0f
+    @Volatile
+    private var currentAmplificationDb = 0
+    private val timelineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val cachedExternalTimelines = ConcurrentHashMap<String, List<SubtitleSyncCue>>()
+    private val inFlightExternalTimelines = ConcurrentHashMap.newKeySet<String>()
+
+    fun disposeExternalTimelines() {
+        timelineScope.cancel()
+        cachedExternalTimelines.clear()
+        inFlightExternalTimelines.clear()
+    }
 
     fun updateStyledSubtitle() {
         executeMpv {
+            val ttsSettings = SubtitleTtsCoordinator.settings.value
+            val hideVisual = ttsSettings.shouldHideVisualSubtitles
             val styled = appliedSubtitleStyle.usesStyledOverlay && SubtitleRendering.supportsTextOverlay(
                 mpv.getPropertyString("current-tracks/sub/codec").orEmpty(),
             )
-            if (styled != styledSubtitleVisible) {
-                mpv.setPropertyBoolean("sub-visibility", !styled)
-                styledSubtitleVisible = styled
+            val suppressMpvNativeSub = styled || hideVisual
+            if (suppressMpvNativeSub != styledSubtitleVisible) {
+                mpv.setPropertyBoolean("sub-visibility", !suppressMpvNativeSub)
+                styledSubtitleVisible = suppressMpvNativeSub
             }
-            val text = if (styled) {
-                mpv.getPropertyString("sub-text/ass") ?: mpv.getPropertyString("sub-text").orEmpty()
+            val plainSubText = mpv.getPropertyString("sub-text").orEmpty()
+            val subStart = mpv.getPropertyDouble("sub-start")
+            val subEnd = mpv.getPropertyDouble("sub-end")
+            val timePos = mpv.getPropertyDouble("time-pos")
+            val subDelay = mpv.getPropertyDouble("sub-delay") ?: 0.0
+            val speed = (mpv.getPropertyDouble("speed") ?: 1.0).toFloat()
+            val externalSubPath = mpv.getPropertyString("current-tracks/sub/external-filename")
+                ?.takeIf { it.isNotBlank() }
+            if (ttsSettings.enabled && externalSubPath != null) {
+                prefetchExternalTimeline(externalSubPath)
+            }
+            val timingContext = if (
+                ttsSettings.enabled &&
+                plainSubText.isNotBlank() &&
+                SubtitleTtsTextCleaner.clean(plainSubText).isNotBlank()
+            ) {
+                buildLibmpvTimingContext(
+                    rawText = plainSubText,
+                    subStartSec = subStart,
+                    subEndSec = subEnd,
+                    timePosSec = timePos,
+                    subDelaySec = subDelay,
+                    speed = speed,
+                    cachedTimeline = externalSubPath?.let(cachedExternalTimelines::get),
+                )
+            } else {
+                null
+            }
+            val text = if (styled && !hideVisual) {
+                mpv.getPropertyString("sub-text/ass") ?: plainSubText
             } else {
                 ""
             }
@@ -1785,7 +2000,31 @@ private class NuvioLibmpvView(
                 if (!released.get()) {
                     subtitleCues = cues
                     subtitleStyle = style
+                    SubtitleTtsCoordinator.onSubtitleCueChanged(plainSubText, timingContext)
                 }
+            }
+        }
+    }
+
+    private fun prefetchExternalTimeline(source: String) {
+        if (released.get() || cachedExternalTimelines.containsKey(source)) return
+        if (!inFlightExternalTimelines.add(source)) return
+        val headersSnapshot = currentExternalSubtitles.firstOrNull { it.url == source }?.headers.orEmpty()
+        timelineScope.launch {
+            try {
+                val parsed = loadAndParseExternalSubtitleTimeline(
+                    context = context,
+                    url = source,
+                    headers = headersSnapshot,
+                    assHandler = null,
+                )
+                if (!released.get() && parsed.isNotEmpty()) {
+                    cachedExternalTimelines[source] = parsed
+                }
+            } catch (_: Exception) {
+                // Best-effort lookahead timeline cache; fallback still uses mpv sub-start/sub-end.
+            } finally {
+                inFlightExternalTimelines.remove(source)
             }
         }
     }
@@ -1866,6 +2105,8 @@ private class NuvioLibmpvView(
 
     private fun loadCurrentSourceNow(playWhenReady: Boolean) {
         val sourceUrl = currentSourceUrl ?: return
+        cachedExternalTimelines.clear()
+        inFlightExternalTimelines.clear()
         applyRequestHeadersNow(currentRequestHeaders)
         setPausedNow(!playWhenReady)
         mpv.setPropertyString("aid", "auto")
@@ -2115,7 +2356,12 @@ private class NuvioLibmpvView(
             }
 
             override fun setSubtitleUri(url: String) {
-                executeMpv { mpv.command("sub-add", url, "select") }
+                executeMpv {
+                    mpv.command("sub-add", url, "select")
+                    if (SubtitleTtsCoordinator.settings.value.enabled) {
+                        prefetchExternalTimeline(url)
+                    }
+                }
             }
 
             override fun clearExternalSubtitle() {
@@ -2208,9 +2454,23 @@ private class NuvioLibmpvView(
 
             override val supportsAudioAmplification = true
 
-            override fun setAudioAmplificationDb(db: Int) {
+            override fun setPlayerVolume(volume: Float) {
+                currentPlayerVolume = volume.coerceIn(0f, 1f)
                 executeMpv {
-                    mpv.setPropertyDouble("volume", 100.0 * audioAmplificationGain(db))
+                    mpv.setPropertyDouble(
+                        "volume",
+                        100.0 * currentPlayerVolume * audioAmplificationGain(currentAmplificationDb),
+                    )
+                }
+            }
+
+            override fun setAudioAmplificationDb(db: Int) {
+                currentAmplificationDb = db
+                executeMpv {
+                    mpv.setPropertyDouble(
+                        "volume",
+                        100.0 * currentPlayerVolume * audioAmplificationGain(currentAmplificationDb),
+                    )
                 }
             }
         }
@@ -2245,6 +2505,9 @@ private class NuvioLibmpvView(
                 }
                 .mapNotNull { node -> node.nodeInt("id") }
                 .forEach { id -> mpv.command("sub-remove", id.toString()) }
+            if (SubtitleTtsCoordinator.settings.value.enabled) {
+                prefetchExternalTimeline(path)
+            }
         }
     }
 
@@ -2984,7 +3247,7 @@ private class SubtitleOffsetRenderersFactory(
     private val onFfmpegAudioRenderer: (FfmpegAudioRenderer?) -> Unit,
     private val shouldNormalizeCuePositionProvider: () -> Boolean,
     private val shouldStripSdhProvider: () -> Boolean,
-    private val presentCues: (List<Cue>) -> List<Cue>,
+    private val presentCues: (List<Cue>, Long) -> List<Cue>,
     private val videoBoundsFractionProvider: () -> RectF?,
     private val onNormalizingOutputCreated: (CueNormalizingTextOutput) -> Unit = {},
 ) : DefaultRenderersFactory(context) {
@@ -3095,7 +3358,7 @@ private class CueNormalizingTextOutput(
     private val delegate: TextOutput,
     private val shouldNormalizeCuePositionProvider: () -> Boolean,
     private val shouldStripSdhProvider: () -> Boolean,
-    private val presentCues: (List<Cue>) -> List<Cue>,
+    private val presentCues: (List<Cue>, Long) -> List<Cue>,
     private val videoBoundsFractionProvider: () -> RectF?,
 ) : TextOutput {
     private var lastCueGroup: CueGroup? = null
@@ -3105,14 +3368,14 @@ private class CueNormalizingTextOutput(
         lastCueGroup = cueGroup
         lastCuesList = null
         val processed = cueGroup.cues.mapNotNull(::processCue)
-        delegate.onCues(CueGroup(presentCues(processed), cueGroup.presentationTimeUs))
+        delegate.onCues(CueGroup(presentCues(processed, cueGroup.presentationTimeUs), cueGroup.presentationTimeUs))
     }
 
     @Deprecated("Uses the deprecated Media3 callback for text outputs.")
     override fun onCues(cues: List<Cue>) {
         lastCuesList = cues
         lastCueGroup = null
-        delegate.onCues(presentCues(cues.mapNotNull(::processCue)))
+        delegate.onCues(presentCues(cues.mapNotNull(::processCue), C.TIME_UNSET))
     }
 
     fun reapplyCurrentCues() {
@@ -3385,4 +3648,215 @@ internal fun ensureBundledSubtitleFonts(context: Context) {
     }.onFailure { e ->
         Log.w(TAG, "Failed to copy bundled subtitle fonts", e)
     }
+}
+
+private fun buildExoSubtitleTimingContext(
+    cues: List<Cue>,
+    presentationTimeUs: Long,
+    playbackSpeed: Float,
+    playerPositionMs: Long,
+    subtitleDelayMs: Int,
+    audioDelayUs: Long,
+    sourceUrl: String,
+    selectedFormat: Format?,
+    externalTimeline: List<SubtitleSyncCue>,
+): SubtitleCuePlaybackContext? {
+    val rawText = cues.mapNotNull { it.text?.toString()?.trim() }.filter { it.isNotEmpty() }.joinToString("\n")
+    if (rawText.isBlank() || SubtitleTtsTextCleaner.clean(rawText).isBlank()) return null
+
+    val adjustedPosMs = (playerPositionMs + audioDelayUs / US_PER_MS - subtitleDelayMs.toLong()).coerceAtLeast(0L)
+    val preferredStartMs = presentationTimeUs.takeIf { it != C.TIME_UNSET && it >= 0L }?.div(US_PER_MS)
+    val safeSpeed = sanitizePlaybackSpeedForTts(playbackSpeed)
+
+    if (externalTimeline.isNotEmpty()) {
+        extractTimingContextFromSyncCues(
+            timeline = externalTimeline,
+            currentRawText = rawText,
+            playbackSpeed = safeSpeed,
+            positionMs = adjustedPosMs,
+            preferredStartMs = preferredStartMs,
+        )?.let { return it }
+    }
+
+    val embeddedTracks = EmbeddedSubtitleCueStore.candidateTracks(
+        sourceKey = sourceUrl,
+        preferredLanguage = selectedFormat?.language,
+    )
+    resolveTimingContextFromEmbeddedTracks(
+        tracks = embeddedTracks,
+        selectedFormat = selectedFormat,
+        rawText = rawText,
+        playbackSpeed = safeSpeed,
+        positionMs = adjustedPosMs,
+        preferredStartMs = preferredStartMs,
+    )?.let { return it }
+
+    val startMs = preferredStartMs ?: adjustedPosMs
+    return SubtitleCuePlaybackContext(
+        currentCue = TimedSpeechCue(rawText = rawText, startMs = startMs),
+        upcomingCues = emptyList(),
+        playbackSpeed = safeSpeed,
+        positionMs = adjustedPosMs,
+    )
+}
+
+private fun resolveTimingContextFromEmbeddedTracks(
+    tracks: List<ReferenceTrack>,
+    selectedFormat: Format?,
+    rawText: String,
+    playbackSpeed: Float,
+    positionMs: Long,
+    preferredStartMs: Long?,
+): SubtitleCuePlaybackContext? {
+    if (tracks.isEmpty()) return null
+    val selectedLabel = selectedFormat?.label?.trim()?.takeIf { it.isNotEmpty() }
+    val prioritized = if (selectedLabel == null) {
+        tracks
+    } else {
+        tracks.sortedByDescending { it.label.equals(selectedLabel, ignoreCase = true) }
+    }
+
+    for (track in prioritized) {
+        val context = extractTimingContextFromSyncCues(
+            timeline = track.cues,
+            currentRawText = rawText,
+            playbackSpeed = playbackSpeed,
+            positionMs = positionMs,
+            preferredStartMs = preferredStartMs,
+            allowTextlessTimingBoundaries = false,
+        )
+        if (context != null && (context.currentCue.endMs != null || context.currentCue.nextCueStartMs != null)) {
+            return context
+        }
+    }
+    for (track in prioritized) {
+        if (track.cues.any { it.text.isNotBlank() }) continue
+        val context = extractTimingContextFromSyncCues(
+            timeline = track.cues,
+            currentRawText = rawText,
+            playbackSpeed = playbackSpeed,
+            positionMs = positionMs,
+            preferredStartMs = preferredStartMs,
+            allowTextlessTimingBoundaries = true,
+        )
+        if (context != null && (context.currentCue.endMs != null || context.currentCue.nextCueStartMs != null)) {
+            return context
+        }
+    }
+    return null
+}
+
+private fun buildLibmpvTimingContext(
+    rawText: String,
+    subStartSec: Double?,
+    subEndSec: Double?,
+    timePosSec: Double?,
+    subDelaySec: Double,
+    speed: Float,
+    cachedTimeline: List<SubtitleSyncCue>?,
+): SubtitleCuePlaybackContext? {
+    val hasValidWindow = subStartSec != null && subEndSec != null &&
+        subStartSec.isFinite() && subEndSec.isFinite() &&
+        subStartSec >= 0.0 && subEndSec > subStartSec
+    val startMs = if (hasValidWindow) (subStartSec * MS_PER_SECOND).toLong() else null
+    val endMs = if (hasValidWindow) (subEndSec * MS_PER_SECOND).toLong().coerceAtLeast(startMs!! + 1L) else null
+    val rawPosMs = timePosSec?.takeIf { it.isFinite() && it >= 0.0 }?.let { (it * MS_PER_SECOND).toLong() }
+    val subDelayMs = if (subDelaySec.isFinite()) (subDelaySec * MS_PER_SECOND).toLong() else 0L
+    val effectivePosMs = resolveMpvEffectivePositionMs(rawPosMs, subDelayMs, startMs, endMs)
+    val safeSpeed = sanitizePlaybackSpeedForTts(speed)
+
+    if (!cachedTimeline.isNullOrEmpty()) {
+        extractTimingContextFromSyncCues(
+            timeline = cachedTimeline,
+            currentRawText = rawText,
+            playbackSpeed = safeSpeed,
+            positionMs = effectivePosMs,
+            preferredStartMs = startMs,
+            preferredEndMs = endMs,
+        )?.let { return it }
+    }
+
+    val resolvedStartMs = startMs ?: effectivePosMs
+    return SubtitleCuePlaybackContext(
+        currentCue = TimedSpeechCue(
+            rawText = rawText,
+            startMs = resolvedStartMs,
+            endMs = endMs,
+            nextCueStartMs = null,
+        ),
+        upcomingCues = emptyList(),
+        playbackSpeed = safeSpeed,
+        positionMs = effectivePosMs,
+    )
+}
+
+private fun resolveMpvEffectivePositionMs(
+    rawPosMs: Long?,
+    subDelayMs: Long,
+    startMs: Long?,
+    endMs: Long?,
+): Long {
+    if (rawPosMs == null) return startMs ?: 0L
+    val shiftedPosMs = (rawPosMs - subDelayMs).coerceAtLeast(0L)
+    if (startMs == null || endMs == null) return shiftedPosMs
+    return when {
+        rawPosMs in startMs..endMs -> rawPosMs
+        shiftedPosMs in startMs..endMs -> shiftedPosMs
+        else -> shiftedPosMs.coerceAtLeast(startMs)
+    }
+}
+
+private suspend fun loadAndParseExternalSubtitleTimeline(
+    context: Context,
+    url: String,
+    headers: Map<String, String>,
+    assHandler: AssHandler?,
+): List<SubtitleSyncCue> = runCatching {
+    val retimedAssText = resolveRetimedAssBodyText(assHandler, url)
+    val rawText = retimedAssText ?: when {
+        url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true) ->
+            httpGetTextWithHeaders(url = url, headers = headers)
+        else -> readLocalSubtitleText(context, url)
+    }
+    if (rawText.isNullOrBlank()) emptyList()
+    else PlayerSubtitleCueParser.parse(rawText, url).sortedBy { it.startTimeMs }
+}.getOrDefault(emptyList())
+
+private fun resolveRetimedAssBodyText(assHandler: AssHandler?, url: String): String? {
+    if (assHandler == null) return null
+    val baseTrackId = addonSubtitleTrackId(url)
+    AutoSyncLibassSubtitles.retimedBody(assHandler, baseTrackId)?.let { return it.decodeToString() }
+    for (prefixIndex in 0..ASS_TRACK_ID_PREFIX_SCAN_LIMIT) {
+        AutoSyncLibassSubtitles.retimedBody(assHandler, "$prefixIndex:$baseTrackId")
+            ?.let { return it.decodeToString() }
+    }
+    return null
+}
+
+private fun readLocalSubtitleText(context: Context, source: String): String? {
+    val parsedUri = Uri.parse(source)
+    if (parsedUri.scheme.equals("content", ignoreCase = true)) {
+        return context.contentResolver.openInputStream(parsedUri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+    }
+    val file = if (parsedUri.scheme.equals("file", ignoreCase = true)) {
+        parsedUri.path?.let(::File)
+    } else {
+        File(source)
+    }
+    return file?.takeIf { it.isFile && it.canRead() }?.readText(Charsets.UTF_8)
+}
+
+private fun findActiveSyncCuesAtPosition(
+    timeline: List<SubtitleSyncCue>,
+    positionMs: Long,
+): List<SubtitleSyncCue> {
+    if (timeline.isEmpty()) return emptyList()
+    val active = ArrayList<SubtitleSyncCue>(2)
+    for (cue in timeline) {
+        if (cue.startTimeMs > positionMs) break
+        if (positionMs in cue.startTimeMs until cue.endTimeMs) {
+            active.add(cue)
+        }
+    }
+    return active
 }

@@ -21,6 +21,9 @@ import com.nuvio.app.features.player.AndroidPlaybackEngine
 import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.player.PlayerSettingsStorage
 import com.nuvio.app.features.player.PlayerSettingsUiState
+import com.nuvio.app.features.player.tts.SubtitleTtsCoordinator
+import com.nuvio.app.features.player.tts.SubtitleTtsSettings
+import com.nuvio.app.features.player.tts.SubtitleTtsStorage
 import org.junit.Rule
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -48,12 +51,16 @@ class SettingsPagesTest {
         ThemeSettingsStorage.initialize(context)
         ThemeSettingsRepository.clearLocalState()
         ThemeSettingsRepository.ensureLoaded()
+        context.getSharedPreferences("nuvio_subtitle_tts", Context.MODE_PRIVATE).edit().clear().commit()
+        SubtitleTtsStorage.initialize(context)
+        SubtitleTtsCoordinator.updateSettings { SubtitleTtsSettings() }
     }
 
     @AfterTest
     fun clearState() {
         PlayerSettingsRepository.clearLocalState()
         ThemeSettingsRepository.clearLocalState()
+        SubtitleTtsCoordinator.updateSettings { SubtitleTtsSettings() }
     }
 
     @Test
@@ -232,6 +239,9 @@ class SettingsPagesTest {
                 "playback-auto-switch-engine" to SettingsPage.PlaybackPlayer,
                 "playback-libass-render-mode" to SettingsPage.PlaybackSubtitles,
                 "playback-custom-buffers" to SettingsPage.PlaybackBuffer,
+                "playback-tts-auto-speed" to SettingsPage.PlaybackAudio,
+                "playback-tts-max-auto-speed" to SettingsPage.PlaybackAudio,
+                "playback-tts-wait-cue-completion" to SettingsPage.PlaybackAudio,
                 "liquid-glass" to SettingsPage.Layout,
                 "navigation-bar" to SettingsPage.Layout,
                 "app-icon" to SettingsPage.Appearance,
@@ -245,5 +255,29 @@ class SettingsPagesTest {
             assertTrue(entries.none { it.target == SettingsSearchTarget.Page(SettingsPage.PlaybackBuffer) })
             assertTrue(entries.any { it.target == SettingsSearchTarget.Page(SettingsPage.PlaybackVideo) })
         }
+    }
+
+    @Test
+    fun playbackAudioTtsSettingsPersistsTimingSyncPreferences() {
+        compose.setContent {
+            NuvioTheme {
+                LazyColumn(Modifier.fillMaxSize()) {
+                    playbackSettingsContent(false, SettingsPage.PlaybackAudio) {}
+                }
+            }
+        }
+        compose.onNodeWithText("Bật thuyết minh phụ đề").performScrollTo().performClick()
+        assertTrue(SubtitleTtsCoordinator.settings.value.enabled)
+        assertEquals(2.1f, SubtitleTtsCoordinator.settings.value.maxAutoSpeed, 0.001f)
+        assertFalse(SubtitleTtsCoordinator.settings.value.waitForCueCompletion)
+
+        compose.onNodeWithText("Tốc độ tối đa khi bắt nhịp").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Chờ đọc hết câu trước khi chuyển").performScrollTo().performClick()
+        assertTrue(SubtitleTtsCoordinator.settings.value.waitForCueCompletion)
+        assertTrue(SubtitleTtsStorage.loadSettings().waitForCueCompletion)
+
+        compose.onNodeWithText("Tự động căn nhịp theo thời gian phụ đề").performScrollTo().performClick()
+        assertFalse(SubtitleTtsCoordinator.settings.value.autoSpeedEnabled)
+        assertFalse(SubtitleTtsStorage.loadSettings().autoSpeedEnabled)
     }
 }

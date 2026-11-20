@@ -22,6 +22,7 @@ import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
+import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.Speed
@@ -47,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import com.nuvio.app.core.ui.AppIconResource
 import com.nuvio.app.core.ui.NuvioBackButton
 import com.nuvio.app.core.ui.appIconPainter
+import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.core.ui.nuvioTypeScale
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
@@ -106,6 +108,8 @@ internal fun PlayerControlActions(
     resizeMode: PlayerResizeMode,
     onSubtitleClick: () -> Unit,
     onAudioClick: () -> Unit,
+    onTtsClick: () -> Unit = {},
+    isTtsEnabled: Boolean = false,
     onSourcesClick: (() -> Unit)?,
     onEpisodesClick: (() -> Unit)?,
     onLiveChannelsClick: (() -> Unit)? = null,
@@ -126,6 +130,8 @@ internal fun PlayerControlActions(
         resizeMode = resizeMode,
         onSubtitleClick = onSubtitleClick,
         onAudioClick = onAudioClick,
+        onTtsClick = onTtsClick,
+        isTtsEnabled = isTtsEnabled,
         onSourcesClick = onSourcesClick,
         onEpisodesClick = onEpisodesClick,
         onLiveChannelsClick = onLiveChannelsClick,
@@ -162,6 +168,7 @@ internal fun PlayerControlActions(
                         icon = action.icon,
                         painter = action.painter,
                         iconSize = action.iconSize,
+                        tint = action.tint,
                     )
                 }
             }
@@ -213,6 +220,8 @@ internal fun playerControlActions(
     resizeMode: PlayerResizeMode,
     onSubtitleClick: () -> Unit,
     onAudioClick: () -> Unit,
+    onTtsClick: () -> Unit = {},
+    isTtsEnabled: Boolean = false,
     onSourcesClick: (() -> Unit)?,
     onEpisodesClick: (() -> Unit)?,
     onLiveChannelsClick: (() -> Unit)? = null,
@@ -241,6 +250,11 @@ internal fun playerControlActions(
         PlayerControlAction(
             stringResource(Res.string.compose_player_audio), onAudioClick,
             painter = appIconPainter(AppIconResource.PlayerAudioFilled),
+        ),
+        PlayerControlAction(
+            "Thuyết minh phụ đề (TTS)", onTtsClick,
+            icon = Icons.Rounded.RecordVoiceOver,
+            tint = if (isTtsEnabled) MaterialTheme.nuvio.colors.accent else Color.White,
         ),
         onChaptersClick?.let {
             PlayerControlAction(
@@ -313,4 +327,5 @@ internal data class PlayerControlAction(
     val icon: ImageVector? = null,
     val painter: Painter? = null,
     val iconSize: Dp = 24.dp,
+    val tint: Color = Color.White,
 )

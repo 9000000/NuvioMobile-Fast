@@ -626,6 +626,27 @@ internal fun settingsSearchEntries(
         rows = listOf(
             PlaybackSearchRow("preferred-audio", stringResource(Res.string.settings_playback_preferred_audio_language), page = SettingsPage.PlaybackAudio),
             PlaybackSearchRow("secondary-audio", stringResource(Res.string.settings_playback_secondary_audio_language), page = SettingsPage.PlaybackAudio),
+            PlaybackSearchRow("tts-subtitles", "Thuyết minh phụ đề (TTS Offline)", "Tự động đọc phụ đề bằng giọng đọc offline không cần mạng", page = SettingsPage.PlaybackAudio),
+            PlaybackSearchRow("tts-google-speech", "Google Speech - Giọng đọc hệ thống", "Tùy chỉnh giọng tiếng Việt, cao độ pitch và bộ máy TTS", page = SettingsPage.PlaybackAudio),
+            PlaybackSearchRow("tts-piper-onnx", "Piper AI - Mô hình ONNX Offline", "Tải và cài đặt giọng đọc Piper VITS từ HuggingFace", page = SettingsPage.PlaybackAudio),
+            PlaybackSearchRow(
+                "tts-auto-speed",
+                "Tự động căn nhịp theo thời gian phụ đề",
+                "Tự động tính tốc độ đọc từ mốc thời gian trong file phụ đề để đọc hết câu đúng nhịp phim",
+                page = SettingsPage.PlaybackAudio,
+            ),
+            PlaybackSearchRow(
+                "tts-max-auto-speed",
+                "Tốc độ tối đa khi bắt nhịp",
+                "Giới hạn tốc độ đọc tối đa khi tự động căn nhịp theo phụ đề (1.4x - 2.2x)",
+                page = SettingsPage.PlaybackAudio,
+            ),
+            PlaybackSearchRow(
+                "tts-wait-cue-completion",
+                "Chờ đọc hết câu trước khi chuyển",
+                "Nếu câu trước còn dở khi sang câu mới, chờ đọc nốt (trong ngưỡng an toàn) rồi mới chuyển tiếp",
+                page = SettingsPage.PlaybackAudio,
+            ),
             PlaybackSearchRow("subtitle-font", stringResource(Res.string.subtitle_font), stringResource(Res.string.subtitle_font_import_hint)),
             PlaybackSearchRow("subtitle-background-opacity", stringResource(Res.string.subtitle_background_opacity)),
             PlaybackSearchRow("subtitle-background-roundness", stringResource(Res.string.subtitle_background_roundness)),

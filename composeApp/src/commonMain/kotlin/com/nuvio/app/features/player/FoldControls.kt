@@ -122,6 +122,8 @@ internal fun FoldControls(
     onScrubFinished: (Long) -> Unit,
     onSubtitleClick: () -> Unit,
     onAudioClick: () -> Unit,
+    onTtsClick: () -> Unit = {},
+    isTtsEnabled: Boolean = false,
     onSourcesClick: (() -> Unit)?,
     onEpisodesClick: (() -> Unit)?,
     onChaptersClick: (() -> Unit)?,
@@ -152,6 +154,8 @@ internal fun FoldControls(
         resizeMode = resizeMode,
         onSubtitleClick = onSubtitleClick,
         onAudioClick = onAudioClick,
+        onTtsClick = onTtsClick,
+        isTtsEnabled = isTtsEnabled,
         onSourcesClick = onSourcesClick,
         onEpisodesClick = onEpisodesClick,
         onChaptersClick = onChaptersClick,
@@ -412,9 +416,9 @@ private fun ActionTile(action: PlayerControlAction, onClick: () -> Unit) {
     Tile(onClick = onClick, modifier = Modifier.width(92.dp).height(76.dp)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             if (action.painter != null) {
-                Icon(action.painter, null, tint = Color.White, modifier = Modifier.size(NuvioTokens.Icon.md))
+                Icon(action.painter, null, tint = action.tint, modifier = Modifier.size(NuvioTokens.Icon.md))
             } else if (action.icon != null) {
-                Icon(action.icon, null, tint = Color.White, modifier = Modifier.size(NuvioTokens.Icon.md))
+                Icon(action.icon, null, tint = action.tint, modifier = Modifier.size(NuvioTokens.Icon.md))
             }
             Spacer(Modifier.height(6.dp))
             Text(

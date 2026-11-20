@@ -57,6 +57,16 @@
 -keep class is.xyz.mpv.** { *; }
 -keep interface is.xyz.mpv.** { *; }
 
+# Sherpa-ONNX JNI wrapper classes, constructors, and fields read directly by libsherpa-onnx-jni.so.
+-keep class com.k2fsa.sherpa.onnx.** { *; }
+-keep interface com.k2fsa.sherpa.onnx.** { *; }
+-keep enum com.k2fsa.sherpa.onnx.** { *; }
+-dontwarn com.k2fsa.sherpa.onnx.**
+
+# Keep TTS models, serializers, and Android TTS helpers intact in release builds.
+-keep class com.nuvio.app.features.player.tts.** { *; }
+-keepclassmembers class com.nuvio.app.features.player.tts.** { *; }
+
 # Common optional security providers used by okhttp on some devices.
 -dontwarn okhttp3.internal.platform.**
 -dontwarn org.conscrypt.**

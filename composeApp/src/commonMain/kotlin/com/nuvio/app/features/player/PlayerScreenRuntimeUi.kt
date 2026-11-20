@@ -18,6 +18,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.nuvio.app.features.player.tts.SubtitleTtsCoordinator
+import com.nuvio.app.features.player.tts.SubtitleTtsModal
 import com.nuvio.app.features.streams.TorrentFilePickerDialog
 import com.nuvio.app.features.torrserver.TorrServerService
 import androidx.compose.ui.Modifier
@@ -191,6 +194,21 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi(
         keyFocusRequester.requestFocus()
     }
 
+    LaunchedEffect(Unit) {
+        SubtitleTtsCoordinator.ensureLoaded()
+    }
+    val ttsSettings by SubtitleTtsCoordinator.settings.collectAsStateWithLifecycle()
+    var showTtsModal by remember { mutableStateOf(false) }
+    LaunchedEffect(playerController, ttsSettings.enabled, ttsSettings.movieVolume) {
+        playerController?.setPlayerVolume(if (ttsSettings.enabled) ttsSettings.movieVolume else 1.0f)
+    }
+    LaunchedEffect(playbackSnapshot.isPlaying) {
+        if (!playbackSnapshot.isPlaying) SubtitleTtsCoordinator.onPlaybackPaused()
+    }
+    DisposableEffect(Unit) {
+        onDispose { SubtitleTtsCoordinator.releaseSession() }
+    }
+
     BindAutoSyncRuntimeEffects() // AutoSync hook
 
     Box(
@@ -353,6 +371,8 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi(
             displayedPositionMs = displayedPositionMs,
             isEpisode = isEpisode,
             folded = fold != null,
+            onTtsClick = { showTtsModal = true },
+            isTtsEnabled = ttsSettings.enabled,
             modifier = panelModifier,
         )
         Box(modifier = videoModifier) {
@@ -377,6 +397,12 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi(
             panelVisible = showPartyPanel && !isInPip,
         )
         RenderPlayerModals(displayedPositionMs = displayedPositionMs)
+        SubtitleTtsModal(
+            visible = showTtsModal,
+            settings = ttsSettings,
+            onSettingsChange = { new -> SubtitleTtsCoordinator.updateSettings { new } },
+            onDismiss = { showTtsModal = false },
+        )
     }
 }
 
@@ -408,6 +434,8 @@ private fun PlayerScreenRuntime.RenderPlayerControls(
     displayedPositionMs: Long,
     isEpisode: Boolean,
     folded: Boolean,
+    onTtsClick: () -> Unit,
+    isTtsEnabled: Boolean,
     modifier: Modifier,
 ) {
     val isInPip = rememberIsInPictureInPicture()
@@ -485,6 +513,8 @@ private fun PlayerScreenRuntime.RenderPlayerControls(
                 refreshTracks()
                 showAudioModal = true
             },
+            onTtsClick = onTtsClick,
+            isTtsEnabled = isTtsEnabled,
             onVideoSettingsClick = if (isIos) {
                 {
                     showVideoSettingsModal = true
@@ -562,6 +592,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(
                 } else {
                     finishTimelineScrub(targetMs)
                     playerController?.seekTo(targetMs)
+                    SubtitleTtsCoordinator.onSeek()
                     scheduleProgressSyncAfterSeek()
                     publishPartyPlayback(positionMs = targetMs)
                 }
@@ -646,6 +677,7 @@ private fun BoxScope.RenderPlaybackOverlays(
                 val seekMs = if (isPartyControlLocked) ownSeekTarget(requestedMs) else requestedMs
                 if (seekMs != null) {
                     playerController?.seekTo(seekMs)
+                    SubtitleTtsCoordinator.onSeek()
                     scheduleProgressSyncAfterSeek()
                     publishPartyPlayback(positionMs = seekMs)
                     skipIntervalDismissed = true

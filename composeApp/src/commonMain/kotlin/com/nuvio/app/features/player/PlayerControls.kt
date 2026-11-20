@@ -35,6 +35,7 @@ import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Forward10
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
+import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.Replay10
 import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.Tv
@@ -122,6 +123,8 @@ internal fun PlayerControlsShell(
     onSpeedClick: () -> Unit,
     onSubtitleClick: () -> Unit,
     onAudioClick: () -> Unit,
+    onTtsClick: () -> Unit = {},
+    isTtsEnabled: Boolean = false,
     onVideoSettingsClick: (() -> Unit)? = null,
     onSourcesClick: (() -> Unit)? = null,
     onEpisodesClick: (() -> Unit)? = null,
@@ -168,6 +171,8 @@ internal fun PlayerControlsShell(
             onScrubFinished = onScrubFinished,
             onSubtitleClick = onSubtitleClick,
             onAudioClick = onAudioClick,
+            onTtsClick = onTtsClick,
+            isTtsEnabled = isTtsEnabled,
             onSourcesClick = onSourcesClick,
             onEpisodesClick = onEpisodesClick,
             onChaptersClick = onChaptersClick,
@@ -327,6 +332,7 @@ internal fun PlayerControlsShell(
                     onSpeedClick = onSpeedClick,
                     onSubtitleClick = onSubtitleClick,
                     onAudioClick = onAudioClick,
+                    onTtsClick = onTtsClick,
                     onSourcesClick = onSourcesClick,
                     onEpisodesClick = onEpisodesClick,
                     onLiveChannelsClick = onLiveChannelsClick,
@@ -379,6 +385,8 @@ internal fun PlayerControlsShell(
                         resizeMode = resizeMode,
                         onSubtitleClick = onSubtitleClick,
                         onAudioClick = onAudioClick,
+                        onTtsClick = onTtsClick,
+                        isTtsEnabled = isTtsEnabled,
                         onSourcesClick = onSourcesClick,
                         onEpisodesClick = onEpisodesClick,
                         onLiveChannelsClick = onLiveChannelsClick,
@@ -708,6 +716,7 @@ private fun ProgressControls(
     onSpeedClick: () -> Unit,
     onSubtitleClick: () -> Unit,
     onAudioClick: () -> Unit,
+    onTtsClick: () -> Unit = {},
     onSourcesClick: (() -> Unit)? = null,
     onEpisodesClick: (() -> Unit)? = null,
     onLiveChannelsClick: (() -> Unit)? = null,
@@ -783,6 +792,11 @@ private fun ProgressControls(
                         label = stringResource(Res.string.compose_player_audio),
                         painter = audioPainter,
                         onClick = onAudioClick,
+                    )
+                    PlayerActionPillButton(
+                        label = "TTS",
+                        icon = Icons.Rounded.RecordVoiceOver,
+                        onClick = onTtsClick,
                     )
                     if (onChaptersClick != null) {
                         PlayerActionPillButton(

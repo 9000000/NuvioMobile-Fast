@@ -18,6 +18,10 @@ import androidx.media3.ui.SubtitleView
 import com.nuvio.app.R
 import com.nuvio.app.features.addons.httpGetTextWithHeaders
 import com.nuvio.app.features.autosync.AutoSyncSyncedSubtitle
+import com.nuvio.app.features.player.tts.SubtitleCuePlaybackContext
+import com.nuvio.app.features.player.tts.SubtitleTtsTextCleaner
+import com.nuvio.app.features.player.tts.SubtitleTtsTimingCalculator
+import com.nuvio.app.features.player.tts.TimedSpeechCue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -26,12 +30,17 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.lang.ref.WeakReference
+import kotlin.math.abs
 
 private const val SIDECAR_TAG = "NuvioSidecar"
 private val sidecarParserFactory = DefaultSubtitleParserFactory()
 private val mainHandler = Handler(Looper.getMainLooper())
 private const val SIDECAR_RENDER_INTERVAL_MS = 100L
 private const val EMPTY_CUE_SIGNATURE = 0x4E5556494FL // "NUVIO"
+private const val US_PER_MS = 1_000L
+private const val MAX_LOOKAHEAD_SCAN_ENTRIES = 24
+private const val MAX_UPCOMING_SPEECH_CUES = 2
+private const val SYNC_CUE_MATCH_WINDOW_MS = 2_000L
 
 internal class SidecarSubtitleController(
     private val scope: CoroutineScope,
@@ -39,6 +48,7 @@ internal class SidecarSubtitleController(
     private val getSubtitleDelayMs: () -> Int = { 0 },
     private val getAudioDelayUs: () -> Long = { 0L },
     private val presentCues: (List<Cue>) -> List<Cue> = { it },
+    private val presentTimedCues: ((List<Cue>, SubtitleCuePlaybackContext?) -> List<Cue>)? = null,
 ) {
     private var sidecarSubtitleJob: Job? = null
     private var sidecarGenerationCounter = 0L
@@ -98,7 +108,7 @@ internal class SidecarSubtitleController(
         if (clearView) {
             postToSubtitleView { view ->
                 view.setTag(R.id.player_view_sidecar_generation_tag, null)
-                view.setCues(presentCues(emptyList()))
+                view.setCues(dispatchPresentedCues(emptyList(), null))
             }
         }
     }
@@ -124,7 +134,7 @@ internal class SidecarSubtitleController(
         resetSidecarCursor()
         postToSubtitleView { view ->
             view.setTag(R.id.player_view_sidecar_generation_tag, generation)
-            view.setCues(presentCues(emptyList()))
+            view.setCues(dispatchPresentedCues(emptyList(), null))
         }
         fun isCurrent() =
             activeSidecarSubtitleKey == subtitleKey && activeSidecarGeneration == generation
@@ -152,7 +162,7 @@ internal class SidecarSubtitleController(
                     sidecarTimedCues = emptyList()
                     postToSubtitleView { view ->
                         view.setTag(R.id.player_view_sidecar_generation_tag, null)
-                        view.setCues(presentCues(emptyList()))
+                        view.setCues(dispatchPresentedCues(emptyList(), null))
                     }
                     return@launch
                 }
@@ -181,7 +191,7 @@ internal class SidecarSubtitleController(
                 sidecarTimedCues = emptyList()
                 postToSubtitleView { view ->
                     view.setTag(R.id.player_view_sidecar_generation_tag, null)
-                    view.setCues(presentCues(emptyList()))
+                    view.setCues(dispatchPresentedCues(emptyList(), null))
                 }
             }
         }
@@ -192,11 +202,12 @@ internal class SidecarSubtitleController(
         val cues = sidecarTimedCues
         if (cues.isEmpty() || activeSidecarSubtitleKey == null) return
         val player = getPlayer() ?: return
-        val delayUs = getSubtitleDelayMs().toLong() * 1_000L
-        val positionUs = (player.currentPosition.coerceAtLeast(0L) * 1_000L + getAudioDelayUs() - delayUs)
+        val delayUs = getSubtitleDelayMs().toLong() * US_PER_MS
+        val positionUs = (player.currentPosition.coerceAtLeast(0L) * US_PER_MS + getAudioDelayUs() - delayUs)
             .coerceAtLeast(0L)
+        val playbackSpeed = player.playbackParameters.speed
         // Null means "the active cue set did not change": nothing to allocate, nothing to post.
-        val active = activeSidecarCuesOrNull(cues, positionUs) ?: return
+        val presented = activeSidecarCuesOrNull(cues, positionUs, playbackSpeed) ?: return
         val currentKey = activeSidecarSubtitleKey ?: return
         val currentGeneration = activeSidecarGeneration.takeIf { it != 0L } ?: return
         postToSubtitleView { view ->
@@ -205,7 +216,7 @@ internal class SidecarSubtitleController(
                 activeSidecarGeneration == currentGeneration &&
                 view.getTag(R.id.player_view_sidecar_generation_tag) == currentGeneration
             ) {
-                view.setCues(presentCues(active))
+                view.setCues(dispatchPresentedCues(presented.cues, presented.timingContext))
             }
         }
     }
@@ -214,6 +225,11 @@ internal class SidecarSubtitleController(
         resetSidecarCursor()
         renderSidecarCuesAtCurrentPosition()
     }
+
+    private fun dispatchPresentedCues(
+        cues: List<Cue>,
+        timingContext: SubtitleCuePlaybackContext?,
+    ): List<Cue> = presentTimedCues?.invoke(cues, timingContext) ?: presentCues(cues)
 
     /**
      * Resolves the cues that are active at [positionUs] using a moving cursor over the cue list,
@@ -225,7 +241,8 @@ internal class SidecarSubtitleController(
     private fun activeSidecarCuesOrNull(
         cues: List<CuesWithTiming>,
         positionUs: Long,
-    ): List<Cue>? {
+        playbackSpeed: Float,
+    ): PresentedSidecarCues? {
         synchronized(sidecarCursorLock) {
             if (sidecarCursorCues !== cues) {
                 sidecarCursorCues = cues
@@ -242,7 +259,20 @@ internal class SidecarSubtitleController(
             val signature = activeCueSignature(activeEntries)
             if (signature == lastSidecarCueSignature) return null
             lastSidecarCueSignature = signature
-            return flattenSidecarCues(activeEntries)
+            val flattened = flattenSidecarCues(activeEntries)
+            val timingContext = if (flattened.isEmpty()) {
+                null
+            } else {
+                extractSidecarTimingContext(
+                    cues = cues,
+                    activeEntries = activeEntries,
+                    nextIndex = sidecarCursorNextIndex,
+                    positionUs = positionUs,
+                    playbackSpeed = playbackSpeed,
+                    isSorted = sidecarCursorSorted,
+                )
+            }
+            return PresentedSidecarCues(flattened, timingContext)
         }
     }
 
@@ -519,3 +549,377 @@ private fun normalizeSidecarCuePosition(cue: Cue): Cue {
         .setLineAnchor(Cue.TYPE_UNSET)
         .build()
 }
+
+private data class PresentedSidecarCues(
+    val cues: List<Cue>,
+    val timingContext: SubtitleCuePlaybackContext?,
+)
+
+private data class TimedCueCandidate(
+    val rawText: String,
+    val startMs: Long,
+    val endMs: Long?,
+)
+
+/**
+ * Extracts active cue boundaries and up to [MAX_UPCOMING_SPEECH_CUES] distinct spoken lookahead cues
+ * from [cues] starting past [nextIndex] at [positionUs].
+ */
+internal fun extractSidecarTimingContext(
+    cues: List<CuesWithTiming>,
+    activeEntries: List<CuesWithTiming>,
+    nextIndex: Int,
+    positionUs: Long,
+    playbackSpeed: Float,
+    isSorted: Boolean = true,
+): SubtitleCuePlaybackContext? {
+    if (activeEntries.isEmpty()) return null
+    val currentRawText = extractSidecarEntriesText(activeEntries)
+    if (currentRawText.isBlank()) return null
+    val cleanCurrentText = SubtitleTtsTextCleaner.clean(currentRawText)
+    if (cleanCurrentText.isBlank()) return null
+
+    // Ignore pure SDH/blank concurrent entries when resolving dialogue start/end boundaries.
+    val spokenEntries = activeEntries.filter { entry ->
+        SubtitleTtsTextCleaner.clean(extractSidecarCuesText(entry.cues)).isNotBlank()
+    }.ifEmpty { activeEntries }
+
+    val startUs = resolveEarliestStartUs(spokenEntries, positionUs)
+    val startMs = startUs / US_PER_MS
+    val endMs = resolveLatestFiniteEndMs(spokenEntries, startUs, startMs)
+
+    val upcomingCandidates = collectDistinctUpcomingSidecarCandidates(
+        cues = cues,
+        startScanIndex = nextIndex,
+        positionUs = positionUs,
+        initialCleanText = cleanCurrentText,
+        isSorted = isSorted,
+    )
+
+    val currentCue = TimedSpeechCue(
+        rawText = currentRawText,
+        startMs = startMs,
+        endMs = endMs,
+        nextCueStartMs = upcomingCandidates.firstOrNull()?.startMs?.takeIf { it > startMs },
+    )
+    return SubtitleCuePlaybackContext(
+        currentCue = currentCue,
+        upcomingCues = buildChainedUpcomingCues(upcomingCandidates),
+        playbackSpeed = sanitizePlaybackSpeedForTts(playbackSpeed),
+        positionMs = (positionUs / US_PER_MS).coerceAtLeast(0L),
+    )
+}
+
+/**
+ * Extracts active cue boundaries and up to [MAX_UPCOMING_SPEECH_CUES] distinct spoken lookahead cues
+ * from a pre-parsed [SubtitleSyncCue] [timeline] (used for ExoPlayer embedded/ASS and libmpv external cues).
+ */
+internal fun extractTimingContextFromSyncCues(
+    timeline: List<SubtitleSyncCue>,
+    currentRawText: String,
+    playbackSpeed: Float,
+    positionMs: Long,
+    preferredStartMs: Long? = null,
+    preferredEndMs: Long? = null,
+    allowTextlessTimingBoundaries: Boolean = false,
+): SubtitleCuePlaybackContext? {
+    if (currentRawText.isBlank()) return null
+    val cleanCurrentText = SubtitleTtsTextCleaner.clean(currentRawText)
+    if (cleanCurrentText.isBlank()) return null
+
+    val safeSpeed = sanitizePlaybackSpeedForTts(playbackSpeed)
+    val safePosMs = positionMs.coerceAtLeast(0L)
+    if (timeline.isEmpty()) {
+        return buildFallbackTimingContext(currentRawText, preferredStartMs, preferredEndMs, safeSpeed, safePosMs)
+    }
+
+    val anchorMs = preferredStartMs?.coerceAtLeast(0L) ?: safePosMs
+    val trackHasText = timeline.any { it.text.isNotBlank() }
+    val matchedIndex = findMatchingSyncCueIndex(
+        timeline = timeline,
+        anchorMs = anchorMs,
+        cleanCurrentText = cleanCurrentText,
+        trackHasText = trackHasText,
+        allowTextlessTimingBoundaries = allowTextlessTimingBoundaries,
+    )
+    if (matchedIndex < 0) {
+        return buildFallbackTimingContext(currentRawText, preferredStartMs, preferredEndMs, safeSpeed, safePosMs)
+    }
+
+    val matched = timeline[matchedIndex]
+    val startMs = preferredStartMs?.coerceAtLeast(0L) ?: matched.startTimeMs.coerceAtLeast(0L)
+    val endMs = (preferredEndMs ?: matched.endTimeMs).takeIf { it > startMs }
+    val thresholdMs = maxOf(startMs, safePosMs)
+
+    if (!trackHasText) {
+        val nextStartMs = findNextTextlessStartMs(timeline, matchedIndex, thresholdMs)
+        return SubtitleCuePlaybackContext(
+            currentCue = TimedSpeechCue(
+                rawText = currentRawText,
+                startMs = startMs,
+                endMs = endMs,
+                nextCueStartMs = nextStartMs,
+            ),
+            upcomingCues = emptyList(),
+            playbackSpeed = safeSpeed,
+            positionMs = safePosMs,
+        )
+    }
+
+    val upcomingCandidates = collectDistinctUpcomingSyncCandidates(
+        timeline = timeline,
+        startIndex = matchedIndex + 1,
+        thresholdMs = thresholdMs,
+        initialCleanText = cleanCurrentText,
+    )
+    return SubtitleCuePlaybackContext(
+        currentCue = TimedSpeechCue(
+            rawText = currentRawText,
+            startMs = startMs,
+            endMs = endMs,
+            nextCueStartMs = upcomingCandidates.firstOrNull()?.startMs?.takeIf { it > startMs },
+        ),
+        upcomingCues = buildChainedUpcomingCues(upcomingCandidates),
+        playbackSpeed = safeSpeed,
+        positionMs = safePosMs,
+    )
+}
+
+private fun buildFallbackTimingContext(
+    rawText: String,
+    preferredStartMs: Long?,
+    preferredEndMs: Long?,
+    safeSpeed: Float,
+    safePosMs: Long,
+): SubtitleCuePlaybackContext? {
+    val startMs = preferredStartMs?.coerceAtLeast(0L) ?: return null
+    return SubtitleCuePlaybackContext(
+        currentCue = TimedSpeechCue(
+            rawText = rawText,
+            startMs = startMs,
+            endMs = preferredEndMs?.takeIf { it > startMs },
+            nextCueStartMs = null,
+        ),
+        upcomingCues = emptyList(),
+        playbackSpeed = safeSpeed,
+        positionMs = safePosMs,
+    )
+}
+
+private fun extractSidecarEntriesText(entries: List<CuesWithTiming>): String {
+    val lines = ArrayList<String>(entries.size)
+    for (entry in entries) {
+        val entryText = extractSidecarCuesText(entry.cues)
+        if (entryText.isNotEmpty()) lines.add(entryText)
+    }
+    return lines.joinToString("\n")
+}
+
+private fun extractSidecarCuesText(cues: List<Cue>): String {
+    val parts = ArrayList<String>(cues.size)
+    for (cue in cues) {
+        val text = cue.text?.toString()?.trim()
+        if (!text.isNullOrEmpty()) parts.add(text)
+    }
+    return parts.joinToString("\n")
+}
+
+private fun resolveEarliestStartUs(entries: List<CuesWithTiming>, fallbackPositionUs: Long): Long {
+    var earliest = Long.MAX_VALUE
+    for (entry in entries) {
+        if (entry.startTimeUs != C.TIME_UNSET && entry.startTimeUs >= 0L && entry.startTimeUs < earliest) {
+            earliest = entry.startTimeUs
+        }
+    }
+    return if (earliest != Long.MAX_VALUE) earliest else fallbackPositionUs.coerceAtLeast(0L)
+}
+
+private fun resolveLatestFiniteEndMs(
+    entries: List<CuesWithTiming>,
+    earliestStartUs: Long,
+    startMs: Long,
+): Long? {
+    var latestFiniteEndUs = Long.MIN_VALUE
+    for (entry in entries) {
+        val endUs = sidecarEntryEndUs(entry)
+        if (endUs != Long.MAX_VALUE && endUs > latestFiniteEndUs) {
+            latestFiniteEndUs = endUs
+        }
+    }
+    if (latestFiniteEndUs == Long.MIN_VALUE || latestFiniteEndUs <= earliestStartUs) return null
+    return maxOf(startMs + 1L, latestFiniteEndUs / US_PER_MS)
+}
+
+private fun resolveEntryFiniteEndMs(entry: CuesWithTiming, startMs: Long): Long? {
+    val endUs = sidecarEntryEndUs(entry)
+    if (endUs == Long.MAX_VALUE || endUs <= entry.startTimeUs) return null
+    return maxOf(startMs + 1L, endUs / US_PER_MS)
+}
+
+private fun collectDistinctUpcomingSidecarCandidates(
+    cues: List<CuesWithTiming>,
+    startScanIndex: Int,
+    positionUs: Long,
+    initialCleanText: String,
+    isSorted: Boolean,
+): List<TimedCueCandidate> {
+    val orderedCues = if (isSorted) {
+        cues
+    } else {
+        cues.filter { it.startTimeUs != C.TIME_UNSET && it.startTimeUs > positionUs }
+            .sortedBy { it.startTimeUs }
+    }
+    val maxCandidates = MAX_UPCOMING_SPEECH_CUES + 1
+    val collected = ArrayList<TimedCueCandidate>(maxCandidates)
+    var lastAcceptedCleanText = initialCleanText
+    var scanned = 0
+    var index = if (isSorted) startScanIndex.coerceIn(0, orderedCues.size) else 0
+
+    while (index < orderedCues.size && scanned < MAX_LOOKAHEAD_SCAN_ENTRIES) {
+        val entry = orderedCues[index]
+        index++
+        if (entry.startTimeUs == C.TIME_UNSET || entry.startTimeUs <= positionUs) continue
+        scanned++
+
+        val entryRawText = extractSidecarCuesText(entry.cues)
+        if (entryRawText.isBlank()) continue
+        val entryCleanText = SubtitleTtsTextCleaner.clean(entryRawText)
+        if (entryCleanText.isBlank() || entryCleanText == lastAcceptedCleanText) continue
+
+        lastAcceptedCleanText = entryCleanText
+        val startMs = (entry.startTimeUs / US_PER_MS).coerceAtLeast(0L)
+        val endMs = resolveEntryFiniteEndMs(entry, startMs)
+        collected.add(TimedCueCandidate(rawText = entryRawText, startMs = startMs, endMs = endMs))
+        if (collected.size >= maxCandidates) break
+    }
+    return collected
+}
+
+private fun findMatchingSyncCueIndex(
+    timeline: List<SubtitleSyncCue>,
+    anchorMs: Long,
+    cleanCurrentText: String,
+    trackHasText: Boolean,
+    allowTextlessTimingBoundaries: Boolean,
+): Int {
+    if (!trackHasText) {
+        if (!allowTextlessTimingBoundaries) return -1
+        return findClosestTimeSyncCueIndex(timeline, anchorMs)
+    }
+
+    var bestExactIndex = -1
+    var bestExactDistance = Long.MAX_VALUE
+    var bestPartialIndex = -1
+    var bestPartialDistance = Long.MAX_VALUE
+
+    for (index in timeline.indices) {
+        val cue = timeline[index]
+        if (anchorMs < cue.startTimeMs - SYNC_CUE_MATCH_WINDOW_MS ||
+            anchorMs > cue.endTimeMs + SYNC_CUE_MATCH_WINDOW_MS
+        ) {
+            continue
+        }
+        val cleanCue = SubtitleTtsTextCleaner.clean(cue.text)
+        if (cleanCue.isBlank()) continue
+        val distance = abs(cue.startTimeMs - anchorMs)
+        if (cleanCue == cleanCurrentText) {
+            if (distance < bestExactDistance) {
+                bestExactDistance = distance
+                bestExactIndex = index
+            }
+        } else if (cleanCurrentText.contains(cleanCue) || cleanCue.contains(cleanCurrentText)) {
+            if (distance < bestPartialDistance) {
+                bestPartialDistance = distance
+                bestPartialIndex = index
+            }
+        }
+    }
+    return if (bestExactIndex >= 0) bestExactIndex else bestPartialIndex
+}
+
+private fun findClosestTimeSyncCueIndex(timeline: List<SubtitleSyncCue>, anchorMs: Long): Int {
+    var bestIndex = -1
+    var bestDistance = Long.MAX_VALUE
+    for (index in timeline.indices) {
+        val cue = timeline[index]
+        if (anchorMs in cue.startTimeMs..cue.endTimeMs) return index
+        if (anchorMs in (cue.startTimeMs - SYNC_CUE_MATCH_WINDOW_MS)..(cue.endTimeMs + SYNC_CUE_MATCH_WINDOW_MS)) {
+            val distance = abs(cue.startTimeMs - anchorMs)
+            if (distance < bestDistance) {
+                bestDistance = distance
+                bestIndex = index
+            }
+        }
+    }
+    return bestIndex
+}
+
+private fun findNextTextlessStartMs(
+    timeline: List<SubtitleSyncCue>,
+    matchedIndex: Int,
+    thresholdMs: Long,
+): Long? {
+    val limit = minOf(timeline.size, matchedIndex + 1 + MAX_LOOKAHEAD_SCAN_ENTRIES)
+    for (index in (matchedIndex + 1) until limit) {
+        val candidateStart = timeline[index].startTimeMs
+        if (candidateStart > thresholdMs) return candidateStart
+    }
+    return null
+}
+
+private fun collectDistinctUpcomingSyncCandidates(
+    timeline: List<SubtitleSyncCue>,
+    startIndex: Int,
+    thresholdMs: Long,
+    initialCleanText: String,
+): List<TimedCueCandidate> {
+    val maxCandidates = MAX_UPCOMING_SPEECH_CUES + 1
+    val collected = ArrayList<TimedCueCandidate>(maxCandidates)
+    var lastAcceptedCleanText = initialCleanText
+    var scanned = 0
+    var index = startIndex.coerceIn(0, timeline.size)
+
+    while (index < timeline.size && scanned < MAX_LOOKAHEAD_SCAN_ENTRIES) {
+        val entry = timeline[index]
+        index++
+        if (entry.startTimeMs <= thresholdMs) continue
+        scanned++
+
+        val cleanEntryText = SubtitleTtsTextCleaner.clean(entry.text)
+        if (cleanEntryText.isBlank() || cleanEntryText == lastAcceptedCleanText) continue
+
+        lastAcceptedCleanText = cleanEntryText
+        val startMs = entry.startTimeMs.coerceAtLeast(0L)
+        val endMs = entry.endTimeMs.takeIf { it > startMs }
+        collected.add(TimedCueCandidate(rawText = entry.text, startMs = startMs, endMs = endMs))
+        if (collected.size >= maxCandidates) break
+    }
+    return collected
+}
+
+private fun buildChainedUpcomingCues(candidates: List<TimedCueCandidate>): List<TimedSpeechCue> {
+    val count = minOf(candidates.size, MAX_UPCOMING_SPEECH_CUES)
+    if (count == 0) return emptyList()
+    val result = ArrayList<TimedSpeechCue>(count)
+    for (index in 0 until count) {
+        val candidate = candidates[index]
+        val nextStartMs = candidates.getOrNull(index + 1)?.startMs?.takeIf { it > candidate.startMs }
+        result.add(
+            TimedSpeechCue(
+                rawText = candidate.rawText,
+                startMs = candidate.startMs,
+                endMs = candidate.endMs,
+                nextCueStartMs = nextStartMs,
+            ),
+        )
+    }
+    return result
+}
+
+internal fun sanitizePlaybackSpeedForTts(playbackSpeed: Float): Float =
+    SubtitleTtsTimingCalculator.clampFinite(
+        value = playbackSpeed,
+        fallback = SubtitleTtsTimingCalculator.DEFAULT_PLAYBACK_SPEED,
+        min = SubtitleTtsTimingCalculator.MIN_PLAYBACK_SPEED,
+        max = SubtitleTtsTimingCalculator.MAX_PLAYBACK_SPEED,
+    )

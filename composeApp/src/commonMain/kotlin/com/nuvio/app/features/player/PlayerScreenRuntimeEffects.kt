@@ -34,6 +34,7 @@ import com.nuvio.app.features.player.skip.segmentCategory
 import com.nuvio.app.features.player.skip.shouldAutoSkip
 import com.nuvio.app.features.player.skip.internalSkipAction
 import com.nuvio.app.features.player.skip.intervalsAtSeekPositions
+import com.nuvio.app.features.player.tts.SubtitleTtsCoordinator
 import com.nuvio.app.features.servers.ServerPlayback
 import com.nuvio.app.features.servers.ServerStreams
 import com.nuvio.app.features.streams.BingeGroupCacheRepository
@@ -777,6 +778,7 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
             val notification = current.autoSkipNotificationMessage(seekPositionMs)
             autoSkippedIntervals.add(current)
             controller.seekTo(seekPositionMs)
+            SubtitleTtsCoordinator.onSeek()
             scheduleProgressSyncAfterSeek()
             publishPartyPlayback(positionMs = seekPositionMs)
             skipIntervalDismissed = true

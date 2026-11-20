@@ -18,6 +18,8 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.media3.common.text.Cue
+import com.nuvio.app.features.player.tts.SubtitleCuePlaybackContext
+import com.nuvio.app.features.player.tts.SubtitleTtsCoordinator
 
 internal class SubtitleCuePresenter(private val style: () -> SubtitleStyleState) {
     var cues by mutableStateOf(StyledSubtitleCues())
@@ -25,13 +27,23 @@ internal class SubtitleCuePresenter(private val style: () -> SubtitleStyleState)
     private var lastCues = emptyList<Cue>()
     private var canStyle = true
 
-    fun present(cues: List<Cue>, canStyle: Boolean = this.canStyle): List<Cue> {
+    fun present(
+        cues: List<Cue>,
+        canStyle: Boolean = this.canStyle,
+        timingContext: SubtitleCuePlaybackContext? = null,
+    ): List<Cue> {
         this.lastCues = cues
         this.canStyle = canStyle
+        val plainText = cues.mapNotNull { it.text?.toString()?.trim() }.filter { it.isNotEmpty() }.joinToString("\n")
+        SubtitleTtsCoordinator.onSubtitleCueChanged(plainText, timingContext)
         return refresh()
     }
 
     fun refresh(): List<Cue> {
+        if (SubtitleTtsCoordinator.settings.value.shouldHideVisualSubtitles) {
+            cues = StyledSubtitleCues()
+            return emptyList()
+        }
         if (!canStyle || !style().usesStyledOverlay) {
             cues = StyledSubtitleCues()
             return lastCues

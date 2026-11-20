@@ -3,6 +3,7 @@
 package com.nuvio.app.features.player
 
 import android.app.Application
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Typeface
 import android.text.SpannableString
@@ -12,9 +13,16 @@ import android.text.style.StyleSpan
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.media3.common.text.Cue
+import com.nuvio.app.features.player.tts.SubtitleCuePlaybackContext
+import com.nuvio.app.features.player.tts.SubtitleTtsCoordinator
+import com.nuvio.app.features.player.tts.SubtitleTtsSettings
+import com.nuvio.app.features.player.tts.SubtitleTtsStorage
+import com.nuvio.app.features.player.tts.TimedSpeechCue
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -22,6 +30,13 @@ import kotlin.test.assertTrue
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class SubtitleCuePresenterTest {
+    @AfterTest
+    fun tearDown() {
+        val context = RuntimeEnvironment.getApplication()
+        context.getSharedPreferences("nuvio_subtitle_tts", Context.MODE_PRIVATE).edit().clear().commit()
+        SubtitleTtsStorage.initialize(context)
+        SubtitleTtsCoordinator.updateSettings { SubtitleTtsSettings() }
+    }
     @Test
     fun liveStyleChangesRetainPausedCuesAndClearAtCueEnd() {
         var style = SubtitleStyleState.DEFAULT
@@ -98,5 +113,35 @@ class SubtitleCuePresenterTest {
 
         assertEquals("Top row", presenter.cues.topText.text)
         assertEquals("Bottom row", presenter.cues.bottomText.text)
+    }
+
+    @Test
+    fun presentWithTimingContextPreservesOverlayAndHonorsHideVisualSubtitles() {
+        val context = RuntimeEnvironment.getApplication()
+        context.getSharedPreferences("nuvio_subtitle_tts", Context.MODE_PRIVATE).edit().clear().commit()
+        SubtitleTtsStorage.initialize(context)
+        SubtitleTtsCoordinator.updateSettings { SubtitleTtsSettings(enabled = false, hideSubtitlesWhenEnabled = false) }
+
+        val presenter = SubtitleCuePresenter { SubtitleStyleState(appearance = SubtitleAppearance(fontId = "serif")) }
+        val cue = Cue.Builder().setText("Timed caption").build()
+        val timingContext = SubtitleCuePlaybackContext(
+            currentCue = TimedSpeechCue(
+                rawText = "Timed caption",
+                startMs = 1_000L,
+                endMs = 2_500L,
+                nextCueStartMs = 3_000L,
+            ),
+            playbackSpeed = 1.25f,
+            positionMs = 1_050L,
+        )
+
+        assertTrue(presenter.present(listOf(cue), canStyle = true, timingContext = timingContext).isEmpty())
+        assertEquals("Timed caption", presenter.cues.bottomText.text)
+
+        SubtitleTtsCoordinator.updateSettings {
+            it.copy(enabled = true, hideSubtitlesWhenEnabled = true)
+        }
+        assertTrue(presenter.refresh().isEmpty())
+        assertTrue(presenter.cues.isEmpty)
     }
 }

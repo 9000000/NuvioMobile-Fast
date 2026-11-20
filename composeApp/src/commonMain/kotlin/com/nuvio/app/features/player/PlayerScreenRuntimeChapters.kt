@@ -1,5 +1,7 @@
 package com.nuvio.app.features.player
 
+import com.nuvio.app.features.player.tts.SubtitleTtsCoordinator
+
 /**
  * Reads the chapters once per source, when it has loaded: libmpv lists them itself, ExoPlayer
  * reads them from the file (when allowed), so a rebuffer must not read them again. They always
@@ -29,6 +31,7 @@ internal fun PlayerScreenRuntime.selectChapter(index: Int) {
     showChaptersPanel = false
     lastManualSkipSeekPositions = playbackSnapshot.positionMs to chapter.startMs
     playerController?.seekTo(chapter.startMs)
+    SubtitleTtsCoordinator.onSeek()
     scheduleProgressSyncAfterSeek()
     controlsVisible = true
 }

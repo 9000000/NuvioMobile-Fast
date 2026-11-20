@@ -29,6 +29,11 @@ import co.touchlab.kermit.Logger
 import com.nuvio.app.features.autosync.AutoSyncMpvCoordinator
 import com.nuvio.app.features.autosync.AutoSyncMpvEngineController
 import com.nuvio.app.features.autosync.IosAutoSyncMpvPlatform
+import com.nuvio.app.features.player.tts.SubtitleCuePlaybackContext
+import com.nuvio.app.features.player.tts.SubtitleTtsCoordinator
+import com.nuvio.app.features.player.tts.SubtitleTtsTextCleaner
+import com.nuvio.app.features.player.tts.SubtitleTtsTimingCalculator
+import com.nuvio.app.features.player.tts.TimedSpeechCue
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.useContents
 import kotlinx.coroutines.delay
@@ -42,6 +47,7 @@ import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
 private const val TAG = "NuvioiOSPlayer"
+private const val IOS_MS_PER_SECOND = 1_000.0
 
 @OptIn(ExperimentalForeignApi::class)
 @Composable
@@ -397,7 +403,11 @@ actual fun PlatformPlayerSurface(
 
     // Cleanup
     DisposableEffect(bridge) {
-        bridge.setSubtitleTextHandler { subtitleText = it }
+        bridge.setSubtitleTextHandler {
+            subtitleText = it
+            val timingContext = buildIosSubtitleTimingContext(rawText = it, bridge = bridge)
+            SubtitleTtsCoordinator.onSubtitleCueChanged(it, timingContext)
+        }
         onDispose {
             bridge.setSubtitleTextHandler(null)
             bridge.destroy()
@@ -526,4 +536,52 @@ private fun encodePlaybackHeadersForBridge(headers: Map<String, String>): String
     return runCatching {
         Json.encodeToString(sanitized)
     }.getOrNull()
+}
+
+private fun buildIosSubtitleTimingContext(
+    rawText: String,
+    bridge: NuvioPlayerBridge,
+): SubtitleCuePlaybackContext? {
+    if (rawText.isBlank() || SubtitleTtsTextCleaner.clean(rawText).isBlank()) return null
+
+    val safeSpeed = SubtitleTtsTimingCalculator.clampFinite(
+        value = bridge.getPlaybackSpeed(),
+        fallback = SubtitleTtsTimingCalculator.DEFAULT_PLAYBACK_SPEED,
+        min = SubtitleTtsTimingCalculator.MIN_PLAYBACK_SPEED,
+        max = SubtitleTtsTimingCalculator.MAX_PLAYBACK_SPEED,
+    )
+    val rawPosMs = bridge.getPositionMs().coerceAtLeast(0L)
+    val subStartSec = bridge.getProperty("sub-start").toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
+    val subEndSec = bridge.getProperty("sub-end").toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
+    val subDelaySec = bridge.getProperty("sub-delay").toDoubleOrNull()?.takeIf { it.isFinite() } ?: 0.0
+
+    if (subStartSec != null && subEndSec != null && subEndSec > subStartSec) {
+        val startMs = (subStartSec * IOS_MS_PER_SECOND).toLong()
+        val endMs = (subEndSec * IOS_MS_PER_SECOND).toLong().coerceAtLeast(startMs + 1L)
+        val subDelayMs = (subDelaySec * IOS_MS_PER_SECOND).toLong()
+        val shiftedPosMs = (rawPosMs - subDelayMs).coerceAtLeast(0L)
+        val effectivePosMs = when {
+            rawPosMs in startMs..endMs -> rawPosMs
+            shiftedPosMs in startMs..endMs -> shiftedPosMs
+            else -> shiftedPosMs.coerceAtLeast(startMs)
+        }
+        return SubtitleCuePlaybackContext(
+            currentCue = TimedSpeechCue(
+                rawText = rawText,
+                startMs = startMs,
+                endMs = endMs,
+            ),
+            playbackSpeed = safeSpeed,
+            positionMs = effectivePosMs,
+        )
+    }
+
+    return SubtitleCuePlaybackContext(
+        currentCue = TimedSpeechCue(
+            rawText = rawText,
+            startMs = rawPosMs,
+        ),
+        playbackSpeed = safeSpeed,
+        positionMs = rawPosMs,
+    )
 }

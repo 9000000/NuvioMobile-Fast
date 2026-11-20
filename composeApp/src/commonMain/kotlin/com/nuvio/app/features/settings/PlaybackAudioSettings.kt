@@ -31,6 +31,8 @@ internal fun PlaybackAudioSettings(
     var showIosAudioOutputDialog by remember { mutableStateOf(false) }
     var showDownmixChannelsDialog by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(if (isTablet) 18.dp else 12.dp)) {
+        PlaybackAudioTtsSettings(isTablet = isTablet)
+
         SettingsSection(
             title = stringResource(Res.string.settings_playback_page_audio),
             isTablet = isTablet,
