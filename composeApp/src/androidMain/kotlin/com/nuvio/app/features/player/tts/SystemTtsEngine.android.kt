@@ -163,13 +163,12 @@ actual object SystemTtsEngine {
                 initFailed = false
                 fallbackTriedForPackage = null
                 readyInstance = active
-                val pending = pendingUtterance
+                pendingToSpeak = pendingUtterance
                 pendingUtterance = null
-                if (pending != null) {
+                if (pendingToSpeak != null) {
                     val id = "nuvio_cue_${utteranceSeq.incrementAndGet()}"
                     activeUtteranceId.set(id)
-                    activeOnCompleted = pending.onCompleted
-                    pendingToSpeak = pending
+                    activeOnCompleted = pendingToSpeak!!.onCompleted
                     pendingUtteranceId = id
                 }
             } else {
@@ -196,14 +195,11 @@ actual object SystemTtsEngine {
 
         failedPending?.onCompleted?.invoke()
 
-        val resolvedTts = readyInstance
-        if (resolvedTts != null) {
-            attachProgressListener(resolvedTts)
-            refreshEnginesAndVoices(resolvedTts)
-            val pending = pendingToSpeak
-            val pendingId = pendingUtteranceId
-            if (pending != null && pendingId != null) {
-                speakInternal(resolvedTts, pending, pendingId)
+        if (readyInstance != null) {
+            attachProgressListener(readyInstance!!)
+            refreshEnginesAndVoices(readyInstance!!)
+            if (pendingToSpeak != null && pendingUtteranceId != null) {
+                speakInternal(readyInstance!!, pendingToSpeak!!, pendingUtteranceId!!)
             }
         }
     }
@@ -302,9 +298,8 @@ actual object SystemTtsEngine {
             }
         }
 
-        val speakId = utteranceIdToSpeak
-        if (readyInstance != null && speakId != null) {
-            speakInternal(readyInstance, utterance, speakId)
+        if (readyInstance != null && utteranceIdToSpeak != null) {
+            speakInternal(readyInstance, utterance, utteranceIdToSpeak!!)
         }
     }
 
@@ -316,7 +311,7 @@ actual object SystemTtsEngine {
         runCatching {
             if (activeUtteranceId.get() != utteranceId) return
             currentTts.setPitch(utterance.pitch.coerceIn(0.6f, 1.5f))
-            currentTts.setSpeechRate(utterance.speed.coerceIn(0.7f, 2.5f))
+            currentTts.setSpeechRate(utterance.speed.coerceIn(0.7f, SubtitleTtsTimingCalculator.MAX_MAX_AUTO_SPEED))
 
             val voicesSnapshot = runCatching { currentTts.voices }.getOrNull()
             if (!utterance.voiceName.isNullOrBlank()) {

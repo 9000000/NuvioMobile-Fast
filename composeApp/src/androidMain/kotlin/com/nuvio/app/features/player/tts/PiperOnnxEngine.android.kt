@@ -169,7 +169,7 @@ actual object PiperOnnxEngine {
         if (text.isBlank()) return null
         synchronized(engineLock) {
             val currentTts = tts ?: return null
-            val safeSpeed = speed.coerceIn(0.5f, 2.5f)
+            val safeSpeed = speed.coerceIn(0.5f, SubtitleTtsTimingCalculator.MAX_MAX_AUTO_SPEED)
             return try {
                 val audio = currentTts.generate(text = text, sid = 0, speed = safeSpeed)
                 val samples = audio.samples

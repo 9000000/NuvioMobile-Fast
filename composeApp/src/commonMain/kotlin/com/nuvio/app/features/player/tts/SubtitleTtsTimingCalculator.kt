@@ -8,7 +8,7 @@ import kotlin.math.roundToInt
  */
 object SubtitleTtsTimingCalculator {
     const val MIN_MAX_AUTO_SPEED = 1.4f
-    const val MAX_MAX_AUTO_SPEED = 2.2f
+    const val MAX_MAX_AUTO_SPEED = 3.0f
     const val DEFAULT_MAX_AUTO_SPEED = 2.1f
 
     const val MIN_BASE_SPEED = 0.7f

@@ -638,7 +638,7 @@ internal fun settingsSearchEntries(
             PlaybackSearchRow(
                 "tts-max-auto-speed",
                 "Tốc độ tối đa khi bắt nhịp",
-                "Giới hạn tốc độ đọc tối đa khi tự động căn nhịp theo phụ đề (1.4x - 2.2x)",
+                "Giới hạn tốc độ đọc tối đa khi tự động căn nhịp theo phụ đề (1.4x - 3.0x)",
                 page = SettingsPage.PlaybackAudio,
             ),
             PlaybackSearchRow(

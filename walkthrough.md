@@ -13,14 +13,14 @@ Mục tiêu của đợt nâng cấp là khắc phục triệt để tình trạ
 
 1. **Tính quỹ thời gian thực (`SubtitleTtsTimingCalculator`)**:
    - Xác định khoảng trống khả dụng thực sự tới câu kế tiếp (`nextCueStartMs`) — kể cả khoảng im lặng sau khi dòng chữ tắt trên màn hình — chia theo `playbackSpeed`, trừ khoảng đệm an toàn (`80ms`).
-   - Tự giữ tốc độ tự nhiên nếu câu có nhiều thời gian, và ép tăng tốc linh hoạt lên tới trần cấu hình `maxAutoSpeed` (`1.4x` – `2.2x`, mặc định `2.1x`) nếu câu thoại ngắn/gấp.
+   - Tự giữ tốc độ tự nhiên nếu câu có nhiều thời gian, và ép tăng tốc linh hoạt lên tới trần cấu hình `maxAutoSpeed` (`1.4x` – `3.0x`, mặc định `2.1x`; tốc độ đọc cơ bản hỗ trợ `0.8x` – `2.0x`) nếu câu thoại ngắn/gấp.
 2. **Tiền tổng hợp Lookahead & Khớp PCM 2 Pha (`SubtitleTtsCoordinator`)**:
    - Đệm trước 1–2 câu sắp tới (`Lookahead Pre-Synthesis Cache`, LRU tối đa 4 mục) ngay khi câu hiện tại đang phát để loại bỏ ~150–300ms độ trễ ONNX lúc chuyển câu.
    - Đo trực tiếp độ dài mảng `FloatArray` PCM đầu ra (`actualSpeechMs`) từ Piper ONNX: nếu vẫn vượt quỹ thời gian và chưa chạm trần tốc độ, tự động tổng hợp lại tối đa **1 lần** với hệ số tốc độ đã hiệu chỉnh (`computeRecalibratedSpeed`).
    - Điều chỉnh khoảng đệm cuối `adaptiveTailMs` động (`45ms` khi câu nối sát nhau, `450ms` khi khoảng trống rộng) qua `SubtitleTtsPlayer`.
 3. **Thu thập Timeline từ 4 Nguồn Phụ đề + Tùy chọn Giao diện**:
    - Hỗ trợ trích xuất timing/lookahead từ `SidecarSubtitleController` (SRT/VTT/TTML), ExoPlayer embedded/`AutoSyncExtractorsFactory`, phụ đề `.ass` qua `libass`, và `libmpv` (`sub-start`/`sub-end`/`sub-delay`).
-   - Đồng bộ 2 chiều giữa Cài đặt Âm thanh (`PlaybackAudioTtsSettings.kt`), Modal trong Player (`SubtitleTtsModal.kt`) và Tìm kiếm cài đặt (`SettingsSearch.kt`): công tắc **"Tự động căn nhịp theo thời gian phụ đề"**, thanh trượt **"Tốc độ tối đa khi bắt nhịp"** (`1.4x`–`2.2x`) và công tắc **"Chờ đọc hết câu trước khi chuyển"** (`waitForCueCompletion`).
+   - Đồng bộ 2 chiều giữa Cài đặt Âm thanh (`PlaybackAudioTtsSettings.kt`), Modal trong Player (`SubtitleTtsModal.kt`) và Tìm kiếm cài đặt (`SettingsSearch.kt`): công tắc **"Tự động căn nhịp theo thời gian phụ đề"**, thanh trượt tốc độ đọc chuẩn tới `2.0x`, thanh trượt **"Tốc độ tối đa khi bắt nhịp"** (`1.4x`–`3.0x`) và công tắc **"Chờ đọc hết câu trước khi chuyển"** (`waitForCueCompletion`); bỏ gợi ý preset `vais1000` (`Giọng Nữ Chuẩn (VAIS1000)`) khỏi danh sách preset mặc định.
 
 ---
 

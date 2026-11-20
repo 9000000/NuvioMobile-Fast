@@ -7,11 +7,11 @@
 ### ⏱️ Đợt công việc Mới: Căn Nhịp TTS Theo Thời Gian Phụ Đề (`PLAN-subtitle-tts-timing-sync`)
 *Kế hoạch chi tiết: [`PLAN-subtitle-tts-timing-sync.md`](file:///f:/MyGithub/NuvioMobile-Fast/PLAN-subtitle-tts-timing-sync.md) | Báo cáo nghiệm thu: [`walkthrough.md`](file:///f:/MyGithub/NuvioMobile-Fast/walkthrough.md)*
 
-- [x] **TASK-TTSSYNC-01**: Mở rộng `SubtitleTtsModels.kt` & `SubtitleTtsStorage` (Android/iOS) thêm `TimedSpeechCue`, `SubtitleCuePlaybackContext`, `maxAutoSpeed` (`1.4f..2.2f`, mặc định `2.1f`) và `waitForCueCompletion` (`Boolean = false`).
+- [x] **TASK-TTSSYNC-01**: Mở rộng `SubtitleTtsModels.kt` & `SubtitleTtsStorage` (Android/iOS) thêm `TimedSpeechCue`, `SubtitleCuePlaybackContext`, `maxAutoSpeed` (`1.4f..3.0f`, mặc định `2.1f`) và `waitForCueCompletion` (`Boolean = false`).
 - [x] **TASK-TTSSYNC-02**: Xây dựng `SubtitleTtsTimingCalculator` & cập nhật `SubtitleTtsTextCleaner.kt` (tính quỹ thời gian theo `nextCueStartMs` và `playbackSpeed`, ước lượng tốc độ theo âm tiết, hiệu chỉnh 2 pha theo độ dài PCM thực tế, và tính `adaptiveTailMs` động).
 - [x] **TASK-TTSSYNC-03**: Mở rộng thu thập timeline + lookahead câu sắp tới từ 4 nguồn phụ đề (`SidecarSubtitleController`, `SubtitleCuePresenter`, ExoPlayer embedded/ASS trong `PlayerEngine.android.kt`, và `libmpv` Android/iOS).
-- [x] **TASK-TTSSYNC-04**: Nâng cấp `SubtitleTtsPlayer` (`adaptiveTailMs`, callback hoàn tất), `SystemTtsEngine` (mở rộng ngưỡng tốc độ lên `2.5f` + `UtteranceProgressListener`) và `SubtitleTtsCoordinator` (tiền tổng hợp Lookahead Cache, khớp PCM 2 pha, hàng đợi tùy chọn `waitForCueCompletion`, và bổ sung `onSeek()` ở mọi thao tác tua/chuyển chương/skip).
-- [x] **TASK-TTSSYNC-05**: Cập nhật UI trong `PlaybackAudioTtsSettings.kt`, `SubtitleTtsModal.kt` và `SettingsSearch.kt` (đổi nhãn `"Tự động căn nhịp theo thời gian phụ đề"`, thêm slider `"Tốc độ tối đa khi bắt nhịp"` và công tắc `"Chờ đọc hết câu trước khi chuyển"`).
+- [x] **TASK-TTSSYNC-04**: Nâng cấp `SubtitleTtsPlayer` (`adaptiveTailMs`, callback hoàn tất), `SystemTtsEngine` (mở rộng ngưỡng tốc độ lên `3.0f` + `UtteranceProgressListener`), `PiperOnnxEngine` (`3.0f`) và `SubtitleTtsCoordinator` (tiền tổng hợp Lookahead Cache, khớp PCM 2 pha, hàng đợi tùy chọn `waitForCueCompletion`, và bổ sung `onSeek()` ở mọi thao tác tua/chuyển chương/skip).
+- [x] **TASK-TTSSYNC-05**: Cập nhật UI trong `PlaybackAudioTtsSettings.kt`, `SubtitleTtsModal.kt` và `SettingsSearch.kt` (đổi nhãn `"Tự động căn nhịp theo thời gian phụ đề"`, bỏ gợi ý preset `vais1000`, tăng giới hạn tốc độ đọc cơ bản lên `2.0x`, slider `"Tốc độ tối đa khi bắt nhịp"` `1.4x..3.0x` và công tắc `"Chờ đọc hết câu trước khi chuyển"`).
 - [x] **TASK-TTSSYNC-06**: Hoàn tất Unit/Robolectric Test (`68` suites / `512` tests PASS), build `assembleFullRelease` (`NuvioMobile-1.2.5-arm64-v8a.apk`) và cài sẵn qua ADB lên `SM-S938B` (`192.168.7.135:46795`) để bạn tự kiểm chứng trên phim thoại nhanh.
 
 ---

@@ -53,11 +53,14 @@ import kotlin.math.roundToInt
 
 private const val PERCENT_SCALE = 100f
 private const val MIN_SPEED = 0.8f
-private const val MAX_SPEED = 1.5f
+private val MAX_SPEED = SubtitleTtsTimingCalculator.MAX_BASE_SPEED
 private const val MIN_PITCH = 0.6f
 private const val MAX_PITCH = 1.5f
 private const val AUTO_SPEED_STEP_PERCENT = 5
 private const val DECIMAL_BASE = 10
+private val BASE_SPEED_SLIDER_STEPS = (
+    ((MAX_SPEED - MIN_SPEED) * PERCENT_SCALE / AUTO_SPEED_STEP_PERCENT).roundToInt() - 1
+    ).coerceAtLeast(0)
 private val AUTO_SPEED_SLIDER_STEPS = (
     (
         (SubtitleTtsTimingCalculator.MAX_MAX_AUTO_SPEED - SubtitleTtsTimingCalculator.MIN_MAX_AUTO_SPEED) *
@@ -252,8 +255,12 @@ fun SubtitleTtsModal(
                         label = "Tốc độ đọc: ${formatSpeedX(settings.baseSpeed)}",
                         value = settings.baseSpeed,
                         valueRange = MIN_SPEED..MAX_SPEED,
+                        steps = BASE_SPEED_SLIDER_STEPS,
                         onValueChange = { speed ->
-                            onSettingsChange(settings.copy(baseSpeed = speed.coerceIn(MIN_SPEED, MAX_SPEED)))
+                            val snapped = snapSpeedStep(speed, MIN_SPEED, MAX_SPEED)
+                            if (snapped != settings.baseSpeed) {
+                                onSettingsChange(settings.copy(baseSpeed = snapped))
+                            }
                         },
                     )
 
@@ -646,13 +653,20 @@ private fun SubtitleTtsSliderSection(
 /**
  * Snaps a raw slider speed value to the nearest 0.05x step within the allowed auto-speed range.
  */
-private fun snapAutoSpeed(rawSpeed: Float): Float {
+private fun snapAutoSpeed(rawSpeed: Float): Float =
+    snapSpeedStep(
+        rawSpeed = rawSpeed,
+        minSpeed = SubtitleTtsTimingCalculator.MIN_MAX_AUTO_SPEED,
+        maxSpeed = SubtitleTtsTimingCalculator.MAX_MAX_AUTO_SPEED,
+    )
+
+/**
+ * Snaps a raw slider speed value to the nearest 0.05x step within [minSpeed..maxSpeed].
+ */
+private fun snapSpeedStep(rawSpeed: Float, minSpeed: Float, maxSpeed: Float): Float {
     val rawPercent = (rawSpeed * PERCENT_SCALE).roundToInt()
     val snappedPercent = (rawPercent.toFloat() / AUTO_SPEED_STEP_PERCENT).roundToInt() * AUTO_SPEED_STEP_PERCENT
-    return (snappedPercent / PERCENT_SCALE).coerceIn(
-        SubtitleTtsTimingCalculator.MIN_MAX_AUTO_SPEED,
-        SubtitleTtsTimingCalculator.MAX_MAX_AUTO_SPEED,
-    )
+    return (snappedPercent / PERCENT_SCALE).coerceIn(minSpeed, maxSpeed)
 }
 
 /**

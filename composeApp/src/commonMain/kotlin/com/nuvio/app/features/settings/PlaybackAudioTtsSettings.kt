@@ -72,7 +72,8 @@ private const val PITCH_MAX_PERCENT = 150
 private const val VOLUME_MIN_PERCENT = 0
 private const val VOLUME_MAX_PERCENT = 100
 private const val SPEED_MIN_PERCENT = 80
-private const val SPEED_MAX_PERCENT = 150
+private val SPEED_MAX_PERCENT =
+    (SubtitleTtsTimingCalculator.MAX_BASE_SPEED * PERCENT_SCALE).roundToInt()
 private const val PERCENT_STEP = 5
 private const val DECIMAL_BASE = 10
 private val MAX_AUTO_SPEED_MIN_PERCENT =

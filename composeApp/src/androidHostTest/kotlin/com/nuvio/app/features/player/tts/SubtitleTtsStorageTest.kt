@@ -52,7 +52,7 @@ class SubtitleTtsStorageTest {
         SubtitleTtsStorage.saveSettings(
             custom.copy(
                 baseSpeed = 3.5f,
-                maxAutoSpeed = 3.0f,
+                maxAutoSpeed = 3.6f,
             ),
         )
         val clampedHigh = SubtitleTtsStorage.loadSettings()
@@ -68,5 +68,7 @@ class SubtitleTtsStorageTest {
         val clampedLowAndNan = SubtitleTtsStorage.loadSettings()
         assertEquals(SubtitleTtsTimingCalculator.DEFAULT_BASE_SPEED, clampedLowAndNan.baseSpeed, 0.001f)
         assertEquals(SubtitleTtsTimingCalculator.MIN_MAX_AUTO_SPEED, clampedLowAndNan.maxAutoSpeed, 0.001f)
+
+        assertEquals(listOf("ngochuyen5", "lacphi", "ngochuyen"), PiperModelManager.presets.map { it.id })
     }
 }

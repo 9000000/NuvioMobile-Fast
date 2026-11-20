@@ -107,11 +107,12 @@ actual object SystemTtsEngine {
         val currentSynth = synchronized(lock) { synthesizer } ?: return
 
         val utterance = AVSpeechUtterance(string = text)
-        val clampedSpeed = speed.coerceIn(0.5f, 2.5f)
+        val clampedSpeed = speed.coerceIn(0.5f, SubtitleTtsTimingCalculator.MAX_MAX_AUTO_SPEED)
         val targetRate = if (clampedSpeed <= 1.0f) {
             AVSpeechUtteranceDefaultSpeechRate * clampedSpeed
         } else {
-            val fraction = ((clampedSpeed - 1.0f) / 1.5f).coerceIn(0f, 1f)
+            val range = (SubtitleTtsTimingCalculator.MAX_MAX_AUTO_SPEED - 1.0f).coerceAtLeast(1.0f)
+            val fraction = ((clampedSpeed - 1.0f) / range).coerceIn(0f, 1f)
             AVSpeechUtteranceDefaultSpeechRate +
                 (AVSpeechUtteranceMaximumSpeechRate - AVSpeechUtteranceDefaultSpeechRate) * fraction
         }

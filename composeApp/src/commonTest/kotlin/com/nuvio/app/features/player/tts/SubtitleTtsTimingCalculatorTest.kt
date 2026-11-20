@@ -15,6 +15,8 @@ class SubtitleTtsTimingCalculatorTest {
         assertEquals(1.0f, settings.baseSpeed, 0.001f)
         assertTrue(settings.autoSpeedEnabled)
         assertEquals(2.1f, settings.maxAutoSpeed, 0.001f)
+        assertEquals(2.0f, SubtitleTtsTimingCalculator.MAX_BASE_SPEED, 0.001f)
+        assertEquals(3.0f, SubtitleTtsTimingCalculator.MAX_MAX_AUTO_SPEED, 0.001f)
         assertFalse(settings.waitForCueCompletion)
 
         val cue = TimedSpeechCue(rawText = "Xin chào", startMs = 1_500L, endMs = 3_000L, nextCueStartMs = 3_500L)
@@ -240,12 +242,20 @@ class SubtitleTtsTimingCalculatorTest {
         )
 
         val clampedAtCeiling = SubtitleTtsTimingCalculator.computeRecalibratedSpeed(
-            usedSpeed = 1.6f,
-            actualSpeechMs = 3_200L,
-            budgetMs = 1_200L,
-            maxAutoSpeed = 2.2f,
+            usedSpeed = 1.8f,
+            actualSpeechMs = 4_000L,
+            budgetMs = 1_000L,
+            maxAutoSpeed = 3.0f,
         )
-        assertEquals(2.2f, clampedAtCeiling!!, 0.001f)
+        assertEquals(3.0f, clampedAtCeiling!!, 0.001f)
+
+        val clampedAboveCeiling = SubtitleTtsTimingCalculator.computeRecalibratedSpeed(
+            usedSpeed = 2.0f,
+            actualSpeechMs = 4_500L,
+            budgetMs = 1_000L,
+            maxAutoSpeed = 3.5f,
+        )
+        assertEquals(3.0f, clampedAboveCeiling!!, 0.001f)
     }
 
     @Test

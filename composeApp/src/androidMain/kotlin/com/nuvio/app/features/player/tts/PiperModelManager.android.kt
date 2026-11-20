@@ -65,13 +65,6 @@ actual object PiperModelManager {
             jsonUrl = "https://huggingface.co/hoanglinhn0/Model/resolve/main/Ng%E1%BB%8Dc%20Huy%E1%BB%81n%E2%84%A2%C2%AE.onnx.json",
             sampleRate = 22050,
         ),
-        PiperPreset(
-            id = "vais1000",
-            name = "Giọng Nữ Chuẩn (VAIS1000)",
-            onnxUrl = "https://huggingface.co/csukuangfj/vits-piper-vi_VN-vais1000-medium/resolve/main/vi_VN-vais1000-medium.onnx",
-            jsonUrl = "https://huggingface.co/csukuangfj/vits-piper-vi_VN-vais1000-medium/resolve/main/vi_VN-vais1000-medium.onnx.json",
-            sampleRate = 22050,
-        ),
     )
 
     private val _downloadProgress = MutableStateFlow<Map<String, Float>>(emptyMap())
