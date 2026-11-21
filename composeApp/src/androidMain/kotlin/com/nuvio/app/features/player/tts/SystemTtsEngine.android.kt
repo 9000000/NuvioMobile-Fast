@@ -3,6 +3,8 @@ package com.nuvio.app.features.player.tts
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
@@ -16,6 +18,8 @@ import java.util.concurrent.atomic.AtomicReference
 
 actual object SystemTtsEngine {
     private const val TAG = "SystemTtsEngine"
+    private const val GOOGLE_TTS_PACKAGE = "com.google.android.tts"
+    private const val DEFAULT_VI_VOICE_ID = "default_vi"
 
     private data class PendingUtterance(
         val text: String,
@@ -42,6 +46,7 @@ actual object SystemTtsEngine {
     private val activeUtteranceId = AtomicReference<String?>(null)
     private var activeOnCompleted: (() -> Unit)? = null
     private var appContext: Context? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private val _availableEngines = MutableStateFlow<List<SystemTtsEngineInfo>>(emptyList())
     actual val availableEngines: StateFlow<List<SystemTtsEngineInfo>> = _availableEngines.asStateFlow()
@@ -65,15 +70,94 @@ actual object SystemTtsEngine {
         return appContext
     }
 
-    actual fun initialize(preferredEnginePackage: String?) {
-        synchronized(ttsLock) {
-            initializeLocked(preferredEnginePackage)
+    private fun discoverInstalledEngines(context: Context): List<SystemTtsEngineInfo> {
+        val pm = context.packageManager
+        val discovered = LinkedHashMap<String, SystemTtsEngineInfo>()
+
+        runCatching {
+            val services = pm.queryIntentServices(Intent(TextToSpeech.Engine.INTENT_ACTION_TTS_SERVICE), 0)
+            for (resolveInfo in services) {
+                val serviceInfo = resolveInfo.serviceInfo ?: continue
+                val pkg = serviceInfo.packageName?.takeIf { it.isNotBlank() } ?: continue
+                val label = runCatching {
+                    serviceInfo.applicationInfo?.loadLabel(pm)?.toString()?.trim()
+                }.getOrNull().orEmpty().ifBlank {
+                    runCatching { resolveInfo.loadLabel(pm)?.toString()?.trim() }.getOrNull().orEmpty()
+                }.ifBlank { pkg }
+                discovered[pkg] = SystemTtsEngineInfo(packageName = pkg, label = label)
+            }
         }
+
+        // Fallback direct package probe for Chinese domestic ROMs that restrict queryIntentServices
+        if (!discovered.containsKey(GOOGLE_TTS_PACKAGE)) {
+            runCatching {
+                val appInfo = pm.getApplicationInfo(GOOGLE_TTS_PACKAGE, 0)
+                val label = runCatching { pm.getApplicationLabel(appInfo).toString().trim() }
+                    .getOrNull()
+                    .orEmpty()
+                    .ifBlank { "Google Speech Services" }
+                discovered[GOOGLE_TTS_PACKAGE] = SystemTtsEngineInfo(
+                    packageName = GOOGLE_TTS_PACKAGE,
+                    label = label,
+                )
+            }
+        }
+
+        return discovered.values.sortedWith(
+            compareByDescending<SystemTtsEngineInfo> {
+                it.packageName.equals(GOOGLE_TTS_PACKAGE, ignoreCase = true)
+            }.thenByDescending {
+                it.packageName.contains("google", ignoreCase = true)
+            }.thenBy { it.label }
+        )
+    }
+
+    private fun resolveTargetEnginePackage(
+        context: Context,
+        preferredEnginePackage: String?,
+        discovered: List<SystemTtsEngineInfo>,
+    ): String? {
+        val explicit = preferredEnginePackage?.takeIf { it.isNotBlank() }
+        if (explicit != null) return explicit
+
+        // On Chinese domestic ROMs, null binds to OEM Chinese TTS (XiaoAi/Vivo/Oppo/iFlytek) which lacks
+        // Google offline voices. Explicitly prefer com.google.android.tts when installed.
+        val googleInstalled = discovered.any { it.packageName.equals(GOOGLE_TTS_PACKAGE, ignoreCase = true) }
+        if (googleInstalled && fallbackTriedForPackage != GOOGLE_TTS_PACKAGE) {
+            return GOOGLE_TTS_PACKAGE
+        }
+        return null
+    }
+
+    actual fun initialize(preferredEnginePackage: String?) {
+        var readyToRefresh: TextToSpeech? = null
+        synchronized(ttsLock) {
+            val context = resolveContext() ?: return
+            val discovered = discoverInstalledEngines(context)
+            if (discovered.isNotEmpty() && _availableEngines.value.isEmpty()) {
+                _availableEngines.value = discovered
+            }
+            val targetPkg = resolveTargetEnginePackage(context, preferredEnginePackage, discovered)
+            if (tts != null && currentEnginePackage == targetPkg && !initFailed) {
+                if (isReady && _availableVoices.value.isEmpty()) {
+                    readyToRefresh = tts
+                } else {
+                    return
+                }
+            } else {
+                initializeLocked(preferredEnginePackage)
+            }
+        }
+        readyToRefresh?.let { refreshEnginesAndVoices(it, scheduleRetryIfEmpty = true) }
     }
 
     private fun initializeLocked(preferredEnginePackage: String?) {
         val context = resolveContext() ?: return
-        val targetPkg = preferredEnginePackage?.takeIf { it.isNotBlank() }
+        val discovered = discoverInstalledEngines(context)
+        if (discovered.isNotEmpty()) {
+            _availableEngines.value = discovered
+        }
+        val targetPkg = resolveTargetEnginePackage(context, preferredEnginePackage, discovered)
         if (tts != null && currentEnginePackage == targetPkg && !initFailed) {
             return
         }
@@ -206,7 +290,9 @@ actual object SystemTtsEngine {
 
         if (readyInstance != null) {
             attachProgressListener(readyInstance!!)
-            refreshEnginesAndVoices(readyInstance!!)
+            // Warm up Vietnamese locale on cold-bound Google TTS service so offline voice packs mount on Chinese ROMs.
+            runCatching { readyInstance!!.setLanguage(Locale("vi", "VN")) }
+            refreshEnginesAndVoices(readyInstance!!, scheduleRetryIfEmpty = true)
             if (pendingToSpeak != null && pendingUtteranceId != null) {
                 speakInternal(readyInstance!!, pendingToSpeak!!, pendingUtteranceId!!)
             }
@@ -223,27 +309,58 @@ actual object SystemTtsEngine {
         }
     }
 
-    private fun refreshEnginesAndVoices(currentTts: TextToSpeech) {
+    private fun Voice.isVoiceInstalled(): Boolean =
+        features?.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) != true
+
+    private fun refreshEnginesAndVoices(
+        currentTts: TextToSpeech,
+        scheduleRetryIfEmpty: Boolean = false,
+    ) {
         runCatching {
-            val engines = currentTts.engines.map { engineInfo ->
-                SystemTtsEngineInfo(
-                    packageName = engineInfo.name,
-                    label = engineInfo.label.ifBlank { engineInfo.name },
-                )
-            }.sortedWith(
+            val context = resolveContext()
+            val pmEngines = if (context != null) discoverInstalledEngines(context) else emptyList()
+            val ttsEngines = runCatching {
+                currentTts.engines.map { engineInfo ->
+                    SystemTtsEngineInfo(
+                        packageName = engineInfo.name,
+                        label = engineInfo.label.ifBlank { engineInfo.name },
+                    )
+                }
+            }.getOrDefault(emptyList())
+
+            val mergedEngines = LinkedHashMap<String, SystemTtsEngineInfo>()
+            for (e in pmEngines) mergedEngines[e.packageName] = e
+            for (e in ttsEngines) mergedEngines[e.packageName] = e
+
+            val engines = mergedEngines.values.sortedWith(
                 compareByDescending<SystemTtsEngineInfo> {
+                    it.packageName.equals(GOOGLE_TTS_PACKAGE, ignoreCase = true)
+                }.thenByDescending {
                     it.packageName.contains("google", ignoreCase = true)
                 }.thenBy { it.label }
             )
-            _availableEngines.value = engines
+            if (engines.isNotEmpty()) {
+                _availableEngines.value = engines
+            }
 
-            val rawVoices = currentTts.voices?.toList().orEmpty()
+            val rawVoices = runCatching { currentTts.voices?.toList().orEmpty() }.getOrDefault(emptyList())
             cachedAndroidVoices = rawVoices
 
-            val voices = rawVoices.mapNotNull { v ->
+            // Prefer voices that are actually installed on disk (!KEY_FEATURE_NOT_INSTALLED).
+            // On Chinese domestic ROMs without GMS/Play Asset Delivery, Google TTS still lists uninstalled
+            // *-local voice stubs with isNetworkConnectionRequired == false + feature "notInstalled".
+            val installedRawVoices = rawVoices.filter { it.isVoiceInstalled() }
+            val effectiveRawVoices = installedRawVoices.ifEmpty { rawVoices }
+
+            val voices = effectiveRawVoices.mapNotNull { v ->
                 val isVi = v.locale.language.equals("vi", ignoreCase = true)
+                val isInstalled = v.isVoiceInstalled()
                 val isNet = v.isNetworkConnectionRequired
-                val netLabel = if (isNet) " (Online)" else " (Offline)"
+                val netLabel = when {
+                    !isInstalled -> " (Chưa tải dữ liệu)"
+                    isNet -> " (Online)"
+                    else -> " (Offline)"
+                }
                 val cleanName = v.name
                     .replace("vi-vn-x-", "Giọng ")
                     .replace("-local", "")
@@ -252,9 +369,9 @@ actual object SystemTtsEngine {
                     name = v.name,
                     displayName = if (isVi) "$cleanName$netLabel" else "${v.locale.displayLanguage} - ${v.name}$netLabel",
                     locale = v.locale.toLanguageTag(),
-                    isNetworkRequired = isNet,
+                    isNetworkRequired = isNet || !isInstalled,
                 )
-            }?.sortedWith(
+            }.sortedWith(
                 compareByDescending<SystemVoiceInfo> {
                     it.locale.startsWith("vi", ignoreCase = true)
                 }.thenBy {
@@ -262,9 +379,39 @@ actual object SystemTtsEngine {
                 }.thenBy {
                     it.displayName
                 }
-            ) ?: emptyList()
+            ).toMutableList()
+
+            val hasViVoice = voices.any { it.locale.startsWith("vi", ignoreCase = true) }
+            if (!hasViVoice) {
+                val viAvailability = runCatching {
+                    currentTts.isLanguageAvailable(Locale("vi", "VN"))
+                }.getOrDefault(TextToSpeech.LANG_NOT_SUPPORTED)
+                if (viAvailability >= TextToSpeech.LANG_AVAILABLE) {
+                    voices.add(
+                        0,
+                        SystemVoiceInfo(
+                            name = DEFAULT_VI_VOICE_ID,
+                            displayName = "Giọng Tiếng Việt mặc định (Offline)",
+                            locale = "vi-VN",
+                            isNetworkRequired = false,
+                        ),
+                    )
+                }
+            }
 
             _availableVoices.value = voices
+
+            if (scheduleRetryIfEmpty && !hasViVoice) {
+                for (delayMs in longArrayOf(400L, 1200L)) {
+                    mainHandler.postDelayed({
+                        val active = synchronized(ttsLock) { if (isReady) tts else null }
+                        if (active === currentTts) {
+                            runCatching { active.setLanguage(Locale("vi", "VN")) }
+                            refreshEnginesAndVoices(active, scheduleRetryIfEmpty = false)
+                        }
+                    }, delayMs)
+                }
+            }
         }.onFailure { e ->
             Log.w(TAG, "Failed refreshing TTS engines/voices", e)
         }
@@ -356,18 +503,26 @@ actual object SystemTtsEngine {
                     runCatching { currentTts.voices?.toList().orEmpty() }.getOrDefault(emptyList())
                         .also { if (it.isNotEmpty()) cachedAndroidVoices = it }
                 }
-                if (desiredVoiceKey != null) {
-                    val matchedVoice = voicesSnapshot.firstOrNull { it.name == desiredVoiceKey }
-                    if (matchedVoice != null) {
+                if (desiredVoiceKey != null && desiredVoiceKey != DEFAULT_VI_VOICE_ID) {
+                    val matchedVoice = voicesSnapshot.firstOrNull {
+                        it.name == desiredVoiceKey && it.isVoiceInstalled()
+                    } ?: voicesSnapshot.firstOrNull {
+                        it.name == desiredVoiceKey
+                    }
+                    if (matchedVoice != null && matchedVoice.isVoiceInstalled()) {
                         currentTts.voice = matchedVoice
                     } else {
-                        currentTts.language = Locale("vi", "VN")
+                        val targetLocale = matchedVoice?.locale ?: Locale("vi", "VN")
+                        currentTts.language = targetLocale
                     }
                 } else {
                     val viVoice = voicesSnapshot.firstOrNull {
-                        it.locale.language.equals("vi", ignoreCase = true) && !it.isNetworkConnectionRequired
+                        it.locale.language.equals("vi", ignoreCase = true) &&
+                            !it.isNetworkConnectionRequired &&
+                            it.isVoiceInstalled()
                     } ?: voicesSnapshot.firstOrNull {
-                        it.locale.language.equals("vi", ignoreCase = true)
+                        it.locale.language.equals("vi", ignoreCase = true) &&
+                            it.isVoiceInstalled()
                     }
                     if (viVoice != null) {
                         currentTts.voice = viVoice
@@ -444,16 +599,25 @@ actual object SystemTtsEngine {
 
     actual fun openSystemTtsSettings() {
         val context = resolveContext() ?: return
+        val targetPkg = synchronized(ttsLock) { currentEnginePackage } ?: GOOGLE_TTS_PACKAGE
+        // On Chinese domestic ROMs, com.android.settings.TTS_SETTINGS often opens the OEM Chinese engine
+        // and hides Google TTS voice downloads; prefer opening Google TTS's voice data installer first.
         runCatching {
-            val intent = Intent("com.android.settings.TTS_SETTINGS").apply {
+            val installIntent = Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA).apply {
+                setPackage(targetPkg)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
-            context.startActivity(intent)
+            context.startActivity(installIntent)
         }.recoverCatching {
-            val intent = Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA).apply {
+            val settingsIntent = Intent("com.android.settings.TTS_SETTINGS").apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
-            context.startActivity(intent)
+            context.startActivity(settingsIntent)
+        }.recoverCatching {
+            val genericInstallIntent = Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(genericInstallIntent)
         }
     }
 }
