@@ -76,6 +76,7 @@ fun SubtitleTtsModal(
     settings: SubtitleTtsSettings,
     onSettingsChange: (SubtitleTtsSettings) -> Unit,
     onDismiss: () -> Unit,
+    subtitleLanguage: String? = null,
     modifier: Modifier = Modifier,
 ) {
     LaunchedEffect(visible) {
@@ -200,6 +201,7 @@ fun SubtitleTtsModal(
                     if (settings.engineType == SubtitleTtsEngineType.SYSTEM) {
                         SystemVoicesSection(
                             availableVoices = availableVoices,
+                            subtitleLanguage = subtitleLanguage,
                             selectedVoiceName = settings.systemVoiceName,
                             systemPitch = settings.systemPitch,
                             onSelectVoice = { voiceName ->
@@ -387,18 +389,17 @@ private fun EngineSwitcherRow(
 @Composable
 private fun SystemVoicesSection(
     availableVoices: List<SystemVoiceInfo>,
+    subtitleLanguage: String?,
     selectedVoiceName: String?,
     systemPitch: Float,
     onSelectVoice: (String) -> Unit,
     onPreviewVoice: (String) -> Unit,
     onPitchChange: (Float) -> Unit,
 ) {
-    val viVoices = availableVoices.filter { it.locale.startsWith("vi", ignoreCase = true) }
-    val displayVoices = if (viVoices.isNotEmpty()) {
-        viVoices.take(MAX_VI_SYSTEM_VOICES)
-    } else {
-        availableVoices.take(MAX_FALLBACK_SYSTEM_VOICES)
+    val filteredVoices = remember(availableVoices, subtitleLanguage) {
+        filterSystemVoicesByLanguage(availableVoices, subtitleLanguage)
     }
+    val displayVoices = filteredVoices.take(MAX_VI_SYSTEM_VOICES)
 
     if (displayVoices.isNotEmpty()) {
         Column(

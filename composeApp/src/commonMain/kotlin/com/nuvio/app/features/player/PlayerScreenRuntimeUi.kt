@@ -400,6 +400,8 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi(
         SubtitleTtsModal(
             visible = showTtsModal,
             settings = ttsSettings,
+            subtitleLanguage = selectedAddonSubtitle?.language
+                ?: subtitleTracks.firstOrNull { it.index == selectedSubtitleIndex }?.language,
             onSettingsChange = { new -> SubtitleTtsCoordinator.updateSettings { new } },
             onDismiss = { showTtsModal = false },
         )

@@ -24,7 +24,12 @@ import kotlin.time.TimeSource
 internal const val MAX_PRE_SYNTH_CACHE_SIZE = 4
 internal const val MAX_LOOKAHEAD_CUES = 2
 internal const val MAX_CARRY_OVER_MS = 1500L
+internal const val MIN_CARRY_OVER_MS = 120L
 internal const val MAX_QUEUE_STALE_MS = 2500L
+internal const val SYSTEM_TTS_COMPLETION_GRACE_MS = 350L
+internal const val PIPER_SYNTH_AND_PLAY_GRACE_MS = 1200L
+internal const val PIPER_PLAYBACK_COMPLETION_GRACE_MS = 120L
+internal const val MIN_EXPECTED_SPEECH_MS = 400L
 
 private val monotonicClockOrigin = TimeSource.Monotonic.markNow()
 
@@ -112,6 +117,7 @@ internal sealed interface CueDispatchDecision {
     data class QueuedPending(
         val expectedActiveGen: Long,
         val startCarryOverTimer: Boolean,
+        val carryOverDelayMs: Long = MAX_CARRY_OVER_MS,
     ) : CueDispatchDecision
 
     data object Ignored : CueDispatchDecision
@@ -142,6 +148,7 @@ internal class SubtitleTtsCueQueueState(
     private var lastSpokenText: String = ""
     private var lastSpokenCueStartMs: Long? = null
     private var isSpeechActive: Boolean = false
+    private var activeExpectedEndAtMs: Long? = null
     private var activePlaybackGen: Long = 0L
     private var pendingCue: PendingCueRequest? = null
 
@@ -181,17 +188,30 @@ internal class SubtitleTtsCueQueueState(
         }
 
         if (waitForCueCompletion && isSpeechActive) {
-            val hadPending = pendingCue != null
-            pendingCue = PendingCueRequest(
-                rawText = rawText,
-                cleanText = cleanText,
-                timingContext = timingContext,
-                arrivedAtMs = nowMs(),
-            )
-            return@synchronized CueDispatchDecision.QueuedPending(
-                expectedActiveGen = activePlaybackGen,
-                startCarryOverTimer = !hadPending,
-            )
+            val currentNow = nowMs()
+            val expectedEnd = activeExpectedEndAtMs
+            if (expectedEnd != null && currentNow >= expectedEnd) {
+                // Active utterance already exceeded its expected duration (e.g. delayed/dropped onDone
+                // or trailing silence only); advance immediately instead of stalling on carry-over.
+                isSpeechActive = false
+                activeExpectedEndAtMs = null
+            } else {
+                val hadPending = pendingCue != null
+                val carryOverDelayMs = expectedEnd
+                    ?.let { (it - currentNow).coerceIn(MIN_CARRY_OVER_MS, MAX_CARRY_OVER_MS) }
+                    ?: MAX_CARRY_OVER_MS
+                pendingCue = PendingCueRequest(
+                    rawText = rawText,
+                    cleanText = cleanText,
+                    timingContext = timingContext,
+                    arrivedAtMs = currentNow,
+                )
+                return@synchronized CueDispatchDecision.QueuedPending(
+                    expectedActiveGen = activePlaybackGen,
+                    startCarryOverTimer = !hadPending,
+                    carryOverDelayMs = carryOverDelayMs,
+                )
+            }
         }
 
         pendingCue = null
@@ -206,9 +226,19 @@ internal class SubtitleTtsCueQueueState(
         )
     }
 
-    fun beginPlayback(): Long = synchronized(lock) {
+    fun beginPlayback(expectedDurationMs: Long? = null): Long = synchronized(lock) {
         isSpeechActive = true
+        activeExpectedEndAtMs = expectedDurationMs?.takeIf { it > 0L }?.let { nowMs() + it }
         ++activePlaybackGen
+    }
+
+    fun updateActiveExpectedDuration(gen: Long, expectedDurationMs: Long) {
+        if (expectedDurationMs <= 0L) return
+        synchronized(lock) {
+            if (activePlaybackGen == gen && isSpeechActive) {
+                activeExpectedEndAtMs = nowMs() + expectedDurationMs
+            }
+        }
     }
 
     fun currentGen(): Long = synchronized(lock) {
@@ -227,6 +257,7 @@ internal class SubtitleTtsCueQueueState(
         synchronized(lock) {
             if (activePlaybackGen == gen) {
                 isSpeechActive = false
+                activeExpectedEndAtMs = null
             }
         }
     }
@@ -236,6 +267,7 @@ internal class SubtitleTtsCueQueueState(
             return@synchronized CompletionAdvanceDecision.Idle
         }
         isSpeechActive = false
+        activeExpectedEndAtMs = null
         consumePendingCueLocked()
     }
 
@@ -244,6 +276,7 @@ internal class SubtitleTtsCueQueueState(
             return@synchronized CompletionAdvanceDecision.Idle
         }
         isSpeechActive = false
+        activeExpectedEndAtMs = null
         activePlaybackGen++
         consumePendingCueLocked()
     }
@@ -280,6 +313,7 @@ internal class SubtitleTtsCueQueueState(
     fun resetActivePlayback(): Long = synchronized(lock) {
         pendingCue = null
         isSpeechActive = false
+        activeExpectedEndAtMs = null
         ++activePlaybackGen
     }
 
@@ -290,6 +324,7 @@ internal class SubtitleTtsCueQueueState(
         lastSpokenCueStartMs = null
         pendingCue = null
         isSpeechActive = false
+        activeExpectedEndAtMs = null
         ++activePlaybackGen
     }
 
@@ -642,10 +677,14 @@ object SubtitleTtsCoordinator {
         }
     }
 
-    private fun startCarryOverTimer(expectedGen: Long) {
+    private fun startCarryOverTimer(
+        expectedGen: Long,
+        delayMs: Long = MAX_CARRY_OVER_MS,
+    ) {
         carryOverTimeoutJob?.cancel()
+        val effectiveDelayMs = delayMs.coerceIn(MIN_CARRY_OVER_MS, MAX_CARRY_OVER_MS)
         carryOverTimeoutJob = scope.launch {
-            delay(MAX_CARRY_OVER_MS)
+            delay(effectiveDelayMs)
             carryOverTimeoutJob = null
             when (val decision = queueState.onCarryOverTimeout(expectedGen)) {
                 CompletionAdvanceDecision.Idle -> Unit
@@ -786,6 +825,14 @@ object SubtitleTtsCoordinator {
         if (model == null) {
             cancelLookaheadJob()
             _statusMessage.value = "Chưa có giọng Piper AI nào được tải. Đang dùng giọng hệ thống dự phòng."
+            val estimatedFallbackMs = (
+                SubtitleTtsTimingCalculator.estimateNaturalDurationMs(cleanText).toDouble() /
+                    fallbackSpeed.coerceAtLeast(SubtitleTtsTimingCalculator.MIN_BASE_SPEED).toDouble()
+                ).toLong()
+            queueState.updateActiveExpectedDuration(
+                playbackGen,
+                (estimatedFallbackMs + SYSTEM_TTS_COMPLETION_GRACE_MS).coerceAtLeast(MIN_EXPECTED_SPEECH_MS),
+            )
             SystemTtsEngine.speak(
                 text = speechText,
                 voiceName = fallbackVoiceName,
@@ -852,6 +899,10 @@ object SubtitleTtsCoordinator {
                         actualSpeechMs = result.speechMs,
                         budgetMs = budgetMs,
                     )
+                    queueState.updateActiveExpectedDuration(
+                        playbackGen,
+                        (result.speechMs + PIPER_PLAYBACK_COMPLETION_GRACE_MS).coerceAtLeast(MIN_EXPECTED_SPEECH_MS),
+                    )
                     playbackStarted = true
                     player.playPcm(
                         samples = result.pcm,
@@ -878,6 +929,14 @@ object SubtitleTtsCoordinator {
                 } else {
                     cancelLookaheadJob()
                     _statusMessage.value = buildPiperFailureMessage(model)
+                    val estimatedFallbackMs = (
+                        SubtitleTtsTimingCalculator.estimateNaturalDurationMs(cleanText).toDouble() /
+                            fallbackSpeed.coerceAtLeast(SubtitleTtsTimingCalculator.MIN_BASE_SPEED).toDouble()
+                        ).toLong()
+                    queueState.updateActiveExpectedDuration(
+                        playbackGen,
+                        (estimatedFallbackMs + SYSTEM_TTS_COMPLETION_GRACE_MS).coerceAtLeast(MIN_EXPECTED_SPEECH_MS),
+                    )
                     playbackStarted = true
                     SystemTtsEngine.speak(
                         text = speechText,
@@ -906,7 +965,6 @@ object SubtitleTtsCoordinator {
         budgetMs: Long?,
         settings: SubtitleTtsSettings,
     ) {
-        val playbackGen = queueState.beginPlayback()
         val targetSpeed = SubtitleTtsTimingCalculator.calculateTimingAwareSpeed(
             cleanText = cleanText,
             budgetMs = budgetMs,
@@ -914,6 +972,17 @@ object SubtitleTtsCoordinator {
             autoSpeedEnabled = settings.autoSpeedEnabled,
             maxAutoSpeed = settings.maxAutoSpeed,
         )
+        val estimatedSpeechMs = (
+            SubtitleTtsTimingCalculator.estimateNaturalDurationMs(cleanText).toDouble() /
+                targetSpeed.coerceAtLeast(SubtitleTtsTimingCalculator.MIN_BASE_SPEED).toDouble()
+            ).toLong()
+        val initialExpectedDurationMs = when (settings.engineType) {
+            SubtitleTtsEngineType.SYSTEM ->
+                (estimatedSpeechMs + SYSTEM_TTS_COMPLETION_GRACE_MS).coerceAtLeast(MIN_EXPECTED_SPEECH_MS)
+            SubtitleTtsEngineType.PIPER_ONNX ->
+                (estimatedSpeechMs + PIPER_SYNTH_AND_PLAY_GRACE_MS).coerceAtLeast(MIN_EXPECTED_SPEECH_MS)
+        }
+        val playbackGen = queueState.beginPlayback(expectedDurationMs = initialExpectedDurationMs)
 
         when (settings.engineType) {
             SubtitleTtsEngineType.SYSTEM -> {
@@ -969,7 +1038,10 @@ object SubtitleTtsCoordinator {
             CueDispatchDecision.Ignored -> return
             is CueDispatchDecision.QueuedPending -> {
                 if (decision.startCarryOverTimer) {
-                    startCarryOverTimer(decision.expectedActiveGen)
+                    startCarryOverTimer(
+                        expectedGen = decision.expectedActiveGen,
+                        delayMs = decision.carryOverDelayMs,
+                    )
                 }
             }
             is CueDispatchDecision.SpeakNow -> {

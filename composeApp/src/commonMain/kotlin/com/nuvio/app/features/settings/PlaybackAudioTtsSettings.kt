@@ -1,5 +1,6 @@
 package com.nuvio.app.features.settings
 
+import com.nuvio.app.features.player.tts.filterSystemVoicesByLanguage
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -290,8 +291,11 @@ internal fun PlaybackAudioTtsSettings(
     }
 
     if (showSystemVoiceDialog && availableVoices.isNotEmpty()) {
+        val filteredVoices = remember(availableVoices) {
+            filterSystemVoicesByLanguage(availableVoices, null)
+        }
         SystemVoiceSelectionDialog(
-            voices = availableVoices,
+            voices = filteredVoices,
             selectedVoiceName = ttsSettings.systemVoiceName,
             onSelect = { voiceName ->
                 SubtitleTtsCoordinator.updateSettings { it.copy(systemVoiceName = voiceName) }

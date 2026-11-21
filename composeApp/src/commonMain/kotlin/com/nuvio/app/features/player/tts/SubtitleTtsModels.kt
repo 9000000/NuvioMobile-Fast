@@ -90,3 +90,53 @@ data class SubtitleTtsSettings(
     val shouldHideVisualSubtitles: Boolean
         get() = enabled && hideSubtitlesWhenEnabled
 }
+
+private val iso639_2To1 = mapOf(
+    "vie" to "vi",
+    "eng" to "en",
+    "jpn" to "ja",
+    "kor" to "ko",
+    "zho" to "zh",
+    "chi" to "zh",
+    "fra" to "fr",
+    "fre" to "fr",
+    "spa" to "es",
+    "deu" to "de",
+    "ger" to "de",
+    "ita" to "it",
+    "por" to "pt",
+    "rus" to "ru",
+    "tha" to "th",
+    "ind" to "id",
+)
+
+fun normalizeTtsLanguageCode(raw: String?): String? {
+    val cleaned = raw?.trim()?.lowercase()?.takeIf {
+        it.isNotEmpty() && it != "und" && it != "unknown" && it != "local"
+    } ?: return null
+    val base = cleaned.substringBefore('-').substringBefore('_')
+    return iso639_2To1[base] ?: base.takeIf { it.length == 2 }
+}
+
+/**
+ * Filters system TTS voices to match [targetLanguage] (e.g. "vi", "en", "vi-VN").
+ * Falls back to Vietnamese ("vi") when [targetLanguage] is null/blank/unknown,
+ * and returns [voices] unchanged if no voice matches the resolved language.
+ */
+fun filterSystemVoicesByLanguage(
+    voices: List<SystemVoiceInfo>,
+    targetLanguage: String?,
+): List<SystemVoiceInfo> {
+    if (voices.isEmpty()) return emptyList()
+    val langCode = normalizeTtsLanguageCode(targetLanguage) ?: "vi"
+    val matched = voices.filter { voice ->
+        val voiceLang = voice.locale.substringBefore('-').substringBefore('_').lowercase()
+        voiceLang == langCode
+    }
+    if (matched.isNotEmpty()) return matched
+    if (langCode != "vi") {
+        val viFallback = voices.filter { it.locale.startsWith("vi", ignoreCase = true) }
+        if (viFallback.isNotEmpty()) return viFallback
+    }
+    return voices
+}

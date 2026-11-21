@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +33,11 @@ actual object SystemTtsEngine {
     @Volatile private var currentEnginePackage: String? = null
     @Volatile private var pendingUtterance: PendingUtterance? = null
     @Volatile private var fallbackTriedForPackage: String? = null
+    @Volatile private var cachedAndroidVoices: List<Voice> = emptyList()
+    private var hasAppliedVoice: Boolean = false
+    private var lastAppliedVoiceKey: String? = null
+    private var lastAppliedPitch: Float = Float.NaN
+    private var lastAppliedSpeed: Float = Float.NaN
     private val utteranceSeq = AtomicLong(0L)
     private val activeUtteranceId = AtomicReference<String?>(null)
     private var activeOnCompleted: (() -> Unit)? = null
@@ -114,7 +120,10 @@ actual object SystemTtsEngine {
                     }
 
                     override fun onStop(utteranceId: String?, interrupted: Boolean) {
-                        clearCompletionIfMatches(utteranceId)
+                        // Our own stop()/speak() clears activeUtteranceId before invoking TTS.stop()/QUEUE_FLUSH,
+                        // so a matching utteranceId here means the OS/TTS service stopped unexpectedly;
+                        // fire completion so waitForCueCompletion never gets stuck active.
+                        consumeCompletionCallback(utteranceId)
                     }
                 },
             )
@@ -228,7 +237,10 @@ actual object SystemTtsEngine {
             )
             _availableEngines.value = engines
 
-            val voices = currentTts.voices?.mapNotNull { v ->
+            val rawVoices = currentTts.voices?.toList().orEmpty()
+            cachedAndroidVoices = rawVoices
+
+            val voices = rawVoices.mapNotNull { v ->
                 val isVi = v.locale.language.equals("vi", ignoreCase = true)
                 val isNet = v.isNetworkConnectionRequired
                 val netLabel = if (isNet) " (Online)" else " (Offline)"
@@ -266,7 +278,10 @@ actual object SystemTtsEngine {
         volume: Float,
         onCompleted: (() -> Unit)?,
     ) {
-        if (text.isBlank()) return
+        if (text.isBlank()) {
+            onCompleted?.invoke()
+            return
+        }
         val utterance = PendingUtterance(
             text = text,
             voiceName = voiceName,
@@ -277,12 +292,17 @@ actual object SystemTtsEngine {
         )
 
         var utteranceIdToSpeak: String? = null
+        var failedImmediately = false
         val readyInstance: TextToSpeech? = synchronized(ttsLock) {
             activeUtteranceId.set(null)
             activeOnCompleted = null
             if (tts == null || initFailed) {
                 pendingUtterance = utterance
                 initializeLocked(currentEnginePackage)
+                if (tts == null || initFailed) {
+                    pendingUtterance = null
+                    failedImmediately = true
+                }
                 null
             } else if (!isReady) {
                 // TextToSpeech is still binding asynchronously; buffer until onInit(SUCCESS)
@@ -298,6 +318,11 @@ actual object SystemTtsEngine {
             }
         }
 
+        if (failedImmediately) {
+            onCompleted?.invoke()
+            return
+        }
+
         if (readyInstance != null && utteranceIdToSpeak != null) {
             speakInternal(readyInstance, utterance, utteranceIdToSpeak!!)
         }
@@ -310,28 +335,48 @@ actual object SystemTtsEngine {
     ) {
         runCatching {
             if (activeUtteranceId.get() != utteranceId) return
-            currentTts.setPitch(utterance.pitch.coerceIn(0.6f, 1.5f))
-            currentTts.setSpeechRate(utterance.speed.coerceIn(0.7f, SubtitleTtsTimingCalculator.MAX_MAX_AUTO_SPEED))
+            val clampedPitch = utterance.pitch.coerceIn(0.6f, 1.5f)
+            val clampedSpeed = utterance.speed.coerceIn(0.7f, SubtitleTtsTimingCalculator.MAX_MAX_AUTO_SPEED)
+            val desiredVoiceKey = utterance.voiceName?.takeIf { it.isNotBlank() }
 
-            val voicesSnapshot = runCatching { currentTts.voices }.getOrNull()
-            if (!utterance.voiceName.isNullOrBlank()) {
-                val matchedVoice = voicesSnapshot?.firstOrNull { it.name == utterance.voiceName }
-                if (matchedVoice != null) {
-                    currentTts.voice = matchedVoice
+            val needsPitch = clampedPitch != lastAppliedPitch
+            val needsSpeed = clampedSpeed != lastAppliedSpeed
+            val needsVoice = !hasAppliedVoice || desiredVoiceKey != lastAppliedVoiceKey
+
+            if (needsPitch) {
+                currentTts.setPitch(clampedPitch)
+                lastAppliedPitch = clampedPitch
+            }
+            if (needsSpeed) {
+                currentTts.setSpeechRate(clampedSpeed)
+                lastAppliedSpeed = clampedSpeed
+            }
+            if (needsVoice) {
+                val voicesSnapshot = cachedAndroidVoices.ifEmpty {
+                    runCatching { currentTts.voices?.toList().orEmpty() }.getOrDefault(emptyList())
+                        .also { if (it.isNotEmpty()) cachedAndroidVoices = it }
+                }
+                if (desiredVoiceKey != null) {
+                    val matchedVoice = voicesSnapshot.firstOrNull { it.name == desiredVoiceKey }
+                    if (matchedVoice != null) {
+                        currentTts.voice = matchedVoice
+                    } else {
+                        currentTts.language = Locale("vi", "VN")
+                    }
                 } else {
-                    currentTts.language = Locale("vi", "VN")
+                    val viVoice = voicesSnapshot.firstOrNull {
+                        it.locale.language.equals("vi", ignoreCase = true) && !it.isNetworkConnectionRequired
+                    } ?: voicesSnapshot.firstOrNull {
+                        it.locale.language.equals("vi", ignoreCase = true)
+                    }
+                    if (viVoice != null) {
+                        currentTts.voice = viVoice
+                    } else {
+                        currentTts.language = Locale("vi", "VN")
+                    }
                 }
-            } else {
-                val viVoice = voicesSnapshot?.firstOrNull {
-                    it.locale.language.equals("vi", ignoreCase = true) && !it.isNetworkConnectionRequired
-                } ?: voicesSnapshot?.firstOrNull {
-                    it.locale.language.equals("vi", ignoreCase = true)
-                }
-                if (viVoice != null) {
-                    currentTts.voice = viVoice
-                } else {
-                    currentTts.language = Locale("vi", "VN")
-                }
+                hasAppliedVoice = true
+                lastAppliedVoiceKey = desiredVoiceKey
             }
 
             if (activeUtteranceId.get() != utteranceId) return
@@ -370,6 +415,11 @@ actual object SystemTtsEngine {
     private fun releaseInternalLocked(clearPending: Boolean) {
         activeUtteranceId.set(null)
         activeOnCompleted = null
+        cachedAndroidVoices = emptyList()
+        hasAppliedVoice = false
+        lastAppliedVoiceKey = null
+        lastAppliedPitch = Float.NaN
+        lastAppliedSpeed = Float.NaN
         if (clearPending) {
             pendingUtterance = null
         }

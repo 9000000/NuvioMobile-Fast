@@ -66,14 +66,19 @@ internal actual class SubtitleTtsPlayer actual constructor() {
         tailMs: Int,
         onCompleted: (() -> Unit)?,
     ) {
-        if (samples.isEmpty()) return
+        if (samples.isEmpty() || sampleRate <= 0) {
+            onCompleted?.invoke()
+            return
+        }
         stop()
         val generation = playbackGeneration.incrementAndGet()
         val safeVolume = volume.coerceIn(0f, 1f)
         synchronized(stateLock) {
             currentVolume = safeVolume
         }
-        val paddedSamples = padPcmWithSilence(samples, sampleRate, tailMs = tailMs)
+        val leadCount = ((sampleRate.toLong() * 40L) / 1000L).toInt()
+        val speechEndFrame = leadCount + samples.size
+        val paddedSamples = padPcmWithSilence(samples, sampleRate, leadMs = 40, tailMs = tailMs)
 
         runCatching {
             val useFloatPcm = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
@@ -174,23 +179,41 @@ internal actual class SubtitleTtsPlayer actual constructor() {
                         }
                     }
 
-                    // Drain remaining queued frames (including trailing silence) cleanly to the end.
+                    // Drain remaining queued speech frames (excluding trailing silence tail) cleanly.
                     if (!writeFailed &&
                         isActive &&
                         playbackGeneration.get() == generation &&
                         synchronized(stateLock) { audioTrack === track }
                     ) {
                         runCatching { track.stop() }
+                        val initialHeadPos = runCatching { track.playbackHeadPosition }.getOrDefault(0).coerceAtLeast(0)
+                        val remainingSpeechFrames = (speechEndFrame - initialHeadPos).coerceAtLeast(0)
+                        val maxDrainWaitMs = ((remainingSpeechFrames.toLong() * 1000L) / sampleRate.toLong() + 180L)
+                            .coerceIn(80L, 1200L)
                         val waitStartMs = System.currentTimeMillis()
-                        val maxDrainWaitMs = maxOf(900L, tailMs.coerceAtLeast(0).toLong() + 500L)
+                        var lastHeadPos = initialHeadPos
+                        var stalledSinceMs = waitStartMs
                         while (isActive &&
                             playbackGeneration.get() == generation &&
                             synchronized(stateLock) { audioTrack === track }
                         ) {
-                            val headPos = runCatching { track.playbackHeadPosition }.getOrDefault(paddedSamples.size)
-                            if (headPos >= paddedSamples.size - 128) break
-                            if (System.currentTimeMillis() - waitStartMs >= maxDrainWaitMs) break
-                            delay(35L)
+                            val playState = runCatching { track.playState }.getOrDefault(AudioTrack.PLAYSTATE_STOPPED)
+                            if (playState != AudioTrack.PLAYSTATE_PLAYING) break
+
+                            val headPos = runCatching { track.playbackHeadPosition }.getOrDefault(speechEndFrame)
+                            if (headPos >= speechEndFrame - 64) break
+                            // On many Android HALs, playbackHeadPosition resets to 0 once drain completes.
+                            if (headPos < lastHeadPos) break
+
+                            val now = System.currentTimeMillis()
+                            if (headPos == lastHeadPos) {
+                                if (now - stalledSinceMs >= 120L) break
+                            } else {
+                                lastHeadPos = headPos
+                                stalledSinceMs = now
+                            }
+                            if (now - waitStartMs >= maxDrainWaitMs) break
+                            delay(15L)
                         }
                         if (isActive &&
                             playbackGeneration.get() == generation &&
@@ -198,11 +221,13 @@ internal actual class SubtitleTtsPlayer actual constructor() {
                         ) {
                             completedNormally = true
                         }
+                    } else if (writeFailed && playbackGeneration.get() == generation) {
+                        completedNormally = true
                     }
                 } catch (ce: CancellationException) {
                     throw ce
                 } catch (_: Exception) {
-                    completedNormally = false
+                    completedNormally = playbackGeneration.get() == generation
                 } finally {
                     val shouldReleaseTrack = synchronized(stateLock) {
                         if (audioTrack === track) {
@@ -230,6 +255,7 @@ internal actual class SubtitleTtsPlayer actual constructor() {
             }
         }.onFailure {
             stop()
+            onCompleted?.invoke()
         }
     }
 

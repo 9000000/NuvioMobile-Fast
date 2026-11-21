@@ -360,6 +360,49 @@ class SubtitleTtsCoordinatorTimingTest {
     }
 
     @Test
+    fun cueQueueSpeaksImmediatelyWhenActiveCueAlreadyExceededExpectedDuration() {
+        var nowMs = 1_000L
+        val queue = SubtitleTtsCueQueueState(nowMs = { nowMs })
+
+        assertIs<CueDispatchDecision.SpeakNow>(
+            queue.onCueArrived("Câu ngắn", null, waitForCueCompletion = true),
+        )
+        queue.beginPlayback(expectedDurationMs = 900L)
+
+        // Next cue arrives well after expected completion (e.g. delayed/dropped onDone callback).
+        // Must speak immediately instead of queuing for MAX_CARRY_OVER_MS.
+        nowMs = 2_200L
+        val decision = assertIs<CueDispatchDecision.SpeakNow>(
+            queue.onCueArrived("Câu tiếp theo", null, waitForCueCompletion = true),
+        )
+        assertEquals("Câu tiếp theo", decision.cleanText)
+        assertFalse(queue.hasPendingCue())
+    }
+
+    @Test
+    fun cueQueueUsesDynamicCarryOverDelayBoundedByRemainingExpectedDuration() {
+        var nowMs = 1_000L
+        val queue = SubtitleTtsCueQueueState(nowMs = { nowMs })
+
+        assertIs<CueDispatchDecision.SpeakNow>(
+            queue.onCueArrived("Câu một", null, waitForCueCompletion = true),
+        )
+        val gen1 = queue.beginPlayback(expectedDurationMs = 2_000L)
+
+        // Update with actual synthesized speech duration (800ms) at t=1100 -> expected end at t=1900.
+        nowMs = 1_100L
+        queue.updateActiveExpectedDuration(gen1, expectedDurationMs = 800L)
+
+        // Next cue arrives at t=1600 -> only 300ms remaining, so carry-over timer should be 300ms (not 1500ms).
+        nowMs = 1_600L
+        val queued = assertIs<CueDispatchDecision.QueuedPending>(
+            queue.onCueArrived("Câu hai", null, waitForCueCompletion = true),
+        )
+        assertTrue(queued.startCarryOverTimer)
+        assertEquals(300L, queued.carryOverDelayMs)
+    }
+
+    @Test
     fun coordinatorExposesCrossAgentContractMethodsWhenDisabled() {
         val context = SubtitleCuePlaybackContext(
             currentCue = TimedSpeechCue(
