@@ -1,21 +1,21 @@
 # Task Management: NuvioMobile Fast
 
-## 📋 Trạng thái Hiện tại: ĐÃ LẬP KẾ HOẠCH (`PLAN-merge-upstream-20261123` - Chờ duyệt để thực thi)
+## 📋 Trạng thái Hiện tại: HOÀN TẤT ĐỒNG BỘ UPSTREAM (`PLAN-merge-upstream-20261123` - Commit `e31731649` trên `main`)
 
 ---
 
-### 🔄 Đợt công việc Mới: Đồng bộ Upstream `NuvioMedia/NuvioMobile` (`18/11/2026` ➔ `23/11/2026`)
-*Kế hoạch chi tiết: [`PLAN-merge-upstream-20261123.md`](file:///f:/MyGithub/NuvioMobile-Fast/PLAN-merge-upstream-20261123.md) | Merge Base: `b66f7725c` ➔ Upstream HEAD: `642f6e031` (40 commits)*
+### 🔄 Đợt công việc Mới: Đồng bộ Upstream `NuvioMedia/NuvioMobile` (`18/11/2026` ➔ `23/11/2026`) — HOÀN TẤT 100%
+*Kế hoạch chi tiết: [`PLAN-merge-upstream-20261123.md`](file:///f:/MyGithub/NuvioMobile-Fast/PLAN-merge-upstream-20261123.md) | Merge Base: `b66f7725c` ➔ Upstream HEAD: `642f6e031` (40 commits) | Merge Commit: `e31731649`*
 
-- [ ] **TASK-SYNC-261123-01** (`git-specialist`): Commit sạch tính năng Phiên âm TTS hiện có trên `main`, tạo nhánh sao lưu `backup/pre-upstream-merge-20261123` và nhánh làm việc `merge/upstream-20261123`.
-- [ ] **TASK-SYNC-261123-02** (`backend-specialist`): Chạy `git merge --no-commit --no-ff upstream/cmp-rewrite` và giải quyết conflict duy nhất tại `androidApp/src/main/AndroidManifest.xml` (giữ trọn cả `<uses-feature android:name="android.hardware.wifi" android:required="false" />` và khối `<queries>` TTS).
-- [ ] **TASK-SYNC-261123-03** (`quality-inspector`): Rà soát 4 file auto-merged (`SubtitleAudioModels.kt`, `SubtitleModal.kt`, `values/strings.xml`, `store.json`), kiểm tra không trùng key XML / JSON hợp lệ, và xác nhận 100% tùy chỉnh độc quyền của Fast còn nguyên vẹn.
-- [ ] **TASK-SYNC-261123-04** (`test-engineer`): Chạy toàn bộ `:composeApp:testAndroidHostTest` (bao gồm `ServerProfileDeviceIdTest` mới) và biên dịch `:androidApp:assembleFullDebug` (`-Pnuvio.android.distribution=full`).
-- [ ] **TASK-SYNC-261123-05** (`orchestrator`): Commit merge chuẩn hóa, fast-forward vào `main` và báo cáo chi tiết mọi thay đổi cho người dùng.
+- [x] **TASK-SYNC-261123-01** (`git-specialist`): Đã commit sạch tính năng Phiên âm TTS (`db71cc1f7`), tạo nhánh sao lưu `backup/pre-upstream-merge-20261123` (`d87bd1985`) và nhánh làm việc `merge/upstream-20261123`.
+- [x] **TASK-SYNC-261123-02** (`backend-specialist`): Đã chạy `git merge --no-commit --no-ff upstream/cmp-rewrite` và giải quyết conflict duy nhất tại `androidApp/src/main/AndroidManifest.xml` (giữ trọn cả `<uses-feature android:name="android.hardware.wifi" android:required="false" />` và khối `<queries>` TTS).
+- [x] **TASK-SYNC-261123-03** (`quality-inspector`): Đã rà soát 4 file auto-merged (`SubtitleAudioModels.kt`, `SubtitleModal.kt`, `values/strings.xml`, `store.json`), xác nhận `0` duplicate keys XML, JSON hợp lệ, và 100% tùy chỉnh độc quyền của Fast còn nguyên vẹn.
+- [x] **TASK-SYNC-261123-04** (`test-engineer`): Hoàn tất `:composeApp:testAndroidHostTest` (**333 suites / 2.327 tests PASS, 0 fail** — gồm cả `ServerProfileDeviceIdTest` mới & toàn bộ 9 suite TTS) và `:androidApp:assembleFullDebug` (`BUILD SUCCESSFUL`), xác minh Merged Manifest chứa đủ Wi-Fi optional + `<queries>` TTS.
+- [x] **TASK-SYNC-261123-05** (`orchestrator`): Đã commit merge `e31731649`, fast-forward vào `main` và xuất báo cáo nghiệm thu chi tiết.
 
 ---
 
-### 🗣️ Đợt công việc Trước: Phiên âm Tên riêng & Từ tiếng Anh cho TTS Tiếng Việt (`PLAN-tts-english-proper-name-transliteration` - HOÀN TẤT, chờ commit ở TASK-SYNC-261123-01)
+### 🗣️ Đợt công việc Trước: Phiên âm Tên riêng & Từ tiếng Anh cho TTS Tiếng Việt (`PLAN-tts-english-proper-name-transliteration` - HOÀN TẤT, commit `db71cc1f7`)
 *Kế hoạch chi tiết: [`PLAN-tts-english-proper-name-transliteration.md`](file:///f:/MyGithub/NuvioMobile-Fast/PLAN-tts-english-proper-name-transliteration.md) | Nguồn tham chiếu: `NuvioTV-Fast`*
 
 - [x] **TASK-TTSTRANS-01** (`backend-specialist`): Đóng gói từ điển `tts_en_vi_dict.tsv` (1.015 mục) vào `composeApp/src/commonMain/composeResources/files/tts_en_vi_dict.tsv` và xây dựng `TtsPhoneticDictionary.kt` thuần KMP (nạp nền trên `Dispatchers.Default`, sửa lập chỉ mục cho từ ghép gạch nối/dấu chấm như `spider-man`, `obi-wan`, `wi-fi`, `middle-earth`, `k.o`) kèm `TtsPhoneticDictionaryAssetTest.kt`.

@@ -1,7 +1,7 @@
 # Kế hoạch Chiến lược: Đồng bộ Commit mới nhất từ NuvioMedia/NuvioMobile Upstream (18/11 ➔ 23/11/2026)
 
 > **Mã kế hoạch**: `PLAN-merge-upstream-20261123`  
-> **Trạng thái**: Sẵn sàng thực thi (Pending Execution)  
+> **Trạng thái**: Hoàn tất 100% (Merged `e31731649` vào `main`, đã kiểm chứng test & build)  
 > **Người lập**: Agent mon  
 > **Ngày lập**: 23/11/2026  
 > **Nguồn upstream**: `https://github.com/NuvioMedia/NuvioMobile.git` (Remote: `upstream`, Nhánh: `cmp-rewrite` — đã tích hợp cả `upstream/main` / `hotfix-1.0.1`)  
