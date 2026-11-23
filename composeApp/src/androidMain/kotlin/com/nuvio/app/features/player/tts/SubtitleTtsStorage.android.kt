@@ -23,6 +23,7 @@ internal actual object SubtitleTtsStorage {
     private const val hideSubtitlesKey = "tts_hide_subtitles"
     private const val maxAutoSpeedKey = "tts_max_auto_speed"
     private const val waitForCueCompletionKey = "tts_wait_for_cue_completion"
+    private const val transliterateEnglishNamesKey = "tts_transliterate_english_names"
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -66,6 +67,7 @@ internal actual object SubtitleTtsStorage {
         val hideSubsScoped = ProfileScopedKey.of(hideSubtitlesKey)
         val maxAutoSpeedScoped = ProfileScopedKey.of(maxAutoSpeedKey)
         val waitForCueCompletionScoped = ProfileScopedKey.of(waitForCueCompletionKey)
+        val transliterateScoped = ProfileScopedKey.of(transliterateEnglishNamesKey)
 
         val engineType = sharedPreferences.getString(engineTypeScoped, null)?.let { name ->
             runCatching { SubtitleTtsEngineType.valueOf(name) }.getOrNull()
@@ -137,6 +139,11 @@ internal actual object SubtitleTtsStorage {
             } else {
                 default.waitForCueCompletion
             },
+            transliterateEnglishNames = if (sharedPreferences.contains(transliterateScoped)) {
+                sharedPreferences.getBoolean(transliterateScoped, default.transliterateEnglishNames)
+            } else {
+                default.transliterateEnglishNames
+            },
         )
     }
 
@@ -170,6 +177,7 @@ internal actual object SubtitleTtsStorage {
             ?.putBoolean(ProfileScopedKey.of(hideSubtitlesKey), settings.hideSubtitlesWhenEnabled)
             ?.putFloat(ProfileScopedKey.of(maxAutoSpeedKey), safeMaxAutoSpeed)
             ?.putBoolean(ProfileScopedKey.of(waitForCueCompletionKey), settings.waitForCueCompletion)
+            ?.putBoolean(ProfileScopedKey.of(transliterateEnglishNamesKey), settings.transliterateEnglishNames)
             ?.apply()
     }
 }

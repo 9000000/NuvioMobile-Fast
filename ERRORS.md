@@ -1,5 +1,23 @@
 # ERRORS.md - Automatic Error Tracking & Learning
 
+## [2026-11-23 22:18] - `EnglishToVietnameseTransliterator` viết hoa nhầm từ tiếng Việt chứa `ph`/`th`/`tr` (`phim` -> `Phim`)
+
+- **Type**: Logic / Process
+- **Severity**: Medium
+- **File**: `composeApp/src/commonMain/kotlin/com/nuvio/app/features/player/tts/EnglishToVietnameseTransliterator.kt:81`
+- **Agent**: mon
+- **Root Cause**: Kế thừa danh sách `ENGLISH_CLUSTERS` từ `NuvioTV-Fast` có chứa các phụ âm chuẩn tiếng Việt (`"ph"`, `"th"`, `"tr"`) kết hợp với `applyRuleBasedPhonetics` luôn ép `titlecase()` ở chữ cái đầu ngay cả khi không có quy tắc chuyển âm nào thay đổi chuỗi, khiến từ tiếng Việt chữ thường như `"phim"` bị biến thành `"Phim"`.
+- **Error Message**:
+  ```
+  EnglishToVietnameseTransliteratorTest > protectsVietnameseStopWordsAndAccentedWords FAILED
+  org.junit.ComparisonFailure: expected:<...nào chúng ta đi xem [p]him?> but was:<...nào chúng ta đi xem [P]him?>
+  ```
+- **Fix Applied**: Loại bỏ `"ph"`, `"th"`, `"tr"` khỏi `ENGLISH_CLUSTERS`; trong `applyRuleBasedPhonetics`, trả `null` nếu không có biến đổi ngữ âm thực tế (`result == lowerName`) và chỉ giữ viết hoa chữ cái đầu khi `originalToken[0].isUpperCase()`.
+- **Prevention**: Luôn kiểm thử nghiêm ngặt bằng `assertEquals` toàn câu tiếng Việt (cả từ có dấu và không dấu chứa `ph`, `th`, `tr`) thay vì chỉ `assertTrue(contains(...))`.
+- **Status**: Fixed
+
+---
+
 ## [2026-11-20 18:44] - Crash JNI `fid == null` trên bản Release APK do R8 obfuscate Sherpa-ONNX
 
 - **Type**: Runtime / Build (ProGuard / R8)

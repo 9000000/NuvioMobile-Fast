@@ -300,6 +300,15 @@ fun SubtitleTtsModal(
                     )
 
                     TtsModalToggleRow(
+                        title = "Phiên âm tên riêng & từ tiếng Anh",
+                        description = "Đọc tên nhân vật, địa danh và từ tiếng Anh theo âm tiếng Việt",
+                        checked = settings.transliterateEnglishNames,
+                        onCheckedChange = { transliterate ->
+                            onSettingsChange(settings.copy(transliterateEnglishNames = transliterate))
+                        },
+                    )
+
+                    TtsModalToggleRow(
                         title = "Ẩn phụ đề khi TTS đọc",
                         description = "Chỉ ẩn hiển thị chữ, phụ đề vẫn chạy ngầm để đọc",
                         checked = settings.hideSubtitlesWhenEnabled,

@@ -446,6 +446,33 @@ internal suspend fun synthesizePiperWithCalibration(
     )
 }
 
+/**
+ * Prepares spoken clean text and punctuated speech text for synthesis, applying
+ * English-to-Vietnamese phonetic transliteration when enabled for Vietnamese TTS targets.
+ */
+internal fun prepareTtsSpeechText(
+    cleanText: String,
+    settings: SubtitleTtsSettings,
+    availableVoices: List<SystemVoiceInfo> = SystemTtsEngine.availableVoices.value,
+    overrideVoiceName: String? = null,
+    usePiper: Boolean = settings.engineType == SubtitleTtsEngineType.PIPER_ONNX,
+    transliterator: EnglishToVietnameseTransliterator = EnglishToVietnameseTransliterator.Default,
+): Pair<String, String> {
+    val shouldTransliterate = settings.transliterateEnglishNames && isVietnameseTtsTarget(
+        settings = settings,
+        availableVoices = availableVoices,
+        overrideVoiceName = overrideVoiceName,
+        usePiper = usePiper,
+    )
+    val spokenCleanText = if (shouldTransliterate) {
+        transliterator.transliterate(cleanText)
+    } else {
+        cleanText
+    }
+    val finalSpeechText = SubtitleTtsTextCleaner.ensureSentenceEndingPunctuation(spokenCleanText)
+    return spokenCleanText to finalSpeechText
+}
+
 object SubtitleTtsCoordinator {
     private val scope: CoroutineScope by lazy { CoroutineScope(SupervisorJob() + Dispatchers.Main) }
     private val player = SubtitleTtsPlayer()
@@ -512,6 +539,7 @@ object SubtitleTtsCoordinator {
                 SubtitleTtsStorage.saveSettings(reconciled)
             }
             SystemTtsEngine.initialize(reconciled.systemEnginePackage)
+            TtsPhoneticDictionary.preloadAsync(scope)
         }
     }
 
@@ -552,6 +580,11 @@ object SubtitleTtsCoordinator {
         }
 
         if (previous.activePiperModelId != updated.activePiperModelId) {
+            pcmCache.clear()
+        }
+
+        if (previous.transliterateEnglishNames != updated.transliterateEnglishNames) {
+            cancelLookaheadJob()
             pcmCache.clear()
         }
 
@@ -668,7 +701,6 @@ object SubtitleTtsCoordinator {
                 if (!currentSettings.enabled) return
                 startSpeakingCue(
                     cleanText = decision.request.cleanText,
-                    speechText = SubtitleTtsTextCleaner.ensureSentenceEndingPunctuation(decision.request.cleanText),
                     timingContext = decision.request.timingContext,
                     budgetMs = decision.adjustedBudgetMs,
                     settings = currentSettings,
@@ -697,7 +729,6 @@ object SubtitleTtsCoordinator {
                     if (!currentSettings.enabled) return@launch
                     startSpeakingCue(
                         cleanText = decision.request.cleanText,
-                        speechText = SubtitleTtsTextCleaner.ensureSentenceEndingPunctuation(decision.request.cleanText),
                         timingContext = decision.request.timingContext,
                         budgetMs = decision.adjustedBudgetMs,
                         settings = currentSettings,
@@ -727,8 +758,12 @@ object SubtitleTtsCoordinator {
 
                 val uCleanText = SubtitleTtsTextCleaner.clean(cue.rawText)
                 if (uCleanText.isBlank()) continue
-                val uSpeechText = SubtitleTtsTextCleaner.ensureSentenceEndingPunctuation(uCleanText)
-                if (uSpeechText == activeSpeechText) continue
+                val (uSpokenCleanText, uSpeechText) = prepareTtsSpeechText(
+                    cleanText = uCleanText,
+                    settings = settingsSnapshot,
+                    usePiper = true,
+                )
+                if (uSpeechText.isBlank() || uSpeechText == activeSpeechText) continue
 
                 val uContext = SubtitleCuePlaybackContext(
                     currentCue = cue,
@@ -738,7 +773,7 @@ object SubtitleTtsCoordinator {
                 )
                 val uBudgetMs = SubtitleTtsTimingCalculator.resolveSpeechBudgetMs(uContext)
                 val uSpeed = SubtitleTtsTimingCalculator.calculateTimingAwareSpeed(
-                    cleanText = uCleanText,
+                    cleanText = uSpokenCleanText,
                     budgetMs = uBudgetMs,
                     baseSpeed = settingsSnapshot.baseSpeed,
                     autoSpeedEnabled = settingsSnapshot.autoSpeedEnabled,
@@ -960,20 +995,25 @@ object SubtitleTtsCoordinator {
 
     private fun startSpeakingCue(
         cleanText: String,
-        speechText: String,
         timingContext: SubtitleCuePlaybackContext?,
         budgetMs: Long?,
         settings: SubtitleTtsSettings,
     ) {
-        val targetSpeed = SubtitleTtsTimingCalculator.calculateTimingAwareSpeed(
+        val (spokenCleanText, finalSpeechText) = prepareTtsSpeechText(
             cleanText = cleanText,
+            settings = settings,
+        )
+        if (finalSpeechText.isBlank()) return
+
+        val targetSpeed = SubtitleTtsTimingCalculator.calculateTimingAwareSpeed(
+            cleanText = spokenCleanText,
             budgetMs = budgetMs,
             baseSpeed = settings.baseSpeed,
             autoSpeedEnabled = settings.autoSpeedEnabled,
             maxAutoSpeed = settings.maxAutoSpeed,
         )
         val estimatedSpeechMs = (
-            SubtitleTtsTimingCalculator.estimateNaturalDurationMs(cleanText).toDouble() /
+            SubtitleTtsTimingCalculator.estimateNaturalDurationMs(spokenCleanText).toDouble() /
                 targetSpeed.coerceAtLeast(SubtitleTtsTimingCalculator.MIN_BASE_SPEED).toDouble()
             ).toLong()
         val initialExpectedDurationMs = when (settings.engineType) {
@@ -988,7 +1028,7 @@ object SubtitleTtsCoordinator {
             SubtitleTtsEngineType.SYSTEM -> {
                 cancelLookaheadJob()
                 SystemTtsEngine.speak(
-                    text = speechText,
+                    text = finalSpeechText,
                     voiceName = settings.systemVoiceName,
                     pitch = settings.systemPitch,
                     speed = targetSpeed,
@@ -999,8 +1039,8 @@ object SubtitleTtsCoordinator {
             SubtitleTtsEngineType.PIPER_ONNX -> {
                 val model = resolvePiperModel(settings, overrideModel = null)
                 speakWithPiperOrFallback(
-                    cleanText = cleanText,
-                    speechText = speechText,
+                    cleanText = spokenCleanText,
+                    speechText = finalSpeechText,
                     model = model,
                     budgetMs = budgetMs,
                     baseSpeed = settings.baseSpeed,
@@ -1050,7 +1090,6 @@ object SubtitleTtsCoordinator {
                 stopActiveAudioOnly()
                 startSpeakingCue(
                     cleanText = decision.cleanText,
-                    speechText = decision.speechText,
                     timingContext = decision.timingContext,
                     budgetMs = decision.budgetMs,
                     settings = currentSettings,
@@ -1102,14 +1141,19 @@ object SubtitleTtsCoordinator {
             (current.engineType == SubtitleTtsEngineType.PIPER_ONNX && overrideVoiceName == null)
 
         val cleanText = SubtitleTtsTextCleaner.clean(text).ifBlank { text.trim() }
-        val speechText = SubtitleTtsTextCleaner.ensureSentenceEndingPunctuation(text)
+        val (spokenCleanText, speechText) = prepareTtsSpeechText(
+            cleanText = cleanText,
+            settings = current,
+            overrideVoiceName = targetVoiceName,
+            usePiper = usePiper,
+        )
         if (speechText.isBlank()) return
         val playbackGen = queueState.beginPlayback()
 
         if (usePiper) {
             val model = resolvePiperModel(current, overrideModel)
             speakWithPiperOrFallback(
-                cleanText = cleanText,
+                cleanText = spokenCleanText,
                 speechText = speechText,
                 model = model,
                 budgetMs = null,

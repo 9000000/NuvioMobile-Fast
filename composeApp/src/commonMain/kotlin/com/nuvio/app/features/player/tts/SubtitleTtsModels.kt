@@ -86,9 +86,46 @@ data class SubtitleTtsSettings(
     val hideSubtitlesWhenEnabled: Boolean = false,
     val maxAutoSpeed: Float = SubtitleTtsTimingCalculator.DEFAULT_MAX_AUTO_SPEED,
     val waitForCueCompletion: Boolean = false,
+    val transliterateEnglishNames: Boolean = true,
 ) {
     val shouldHideVisualSubtitles: Boolean
         get() = enabled && hideSubtitlesWhenEnabled
+}
+
+private const val DEFAULT_VI_VOICE_ID = "default_vi"
+private val NON_VI_VOICE_LOCALE_MARKERS = listOf(
+    "en-", "en_", "ja-", "ja_", "ko-", "ko_", "zh-", "zh_",
+    "fr-", "fr_", "es-", "es_", "de-", "de_", "it-", "it_",
+    "pt-", "pt_", "ru-", "ru_", "th-", "th_", "id-", "id_",
+)
+
+/**
+ * Returns `true` when the active TTS output targets Vietnamese so English-to-Vietnamese
+ * phonetic transliteration should be applied.
+ */
+fun isVietnameseTtsTarget(
+    settings: SubtitleTtsSettings,
+    availableVoices: List<SystemVoiceInfo>,
+    overrideVoiceName: String? = null,
+    usePiper: Boolean = settings.engineType == SubtitleTtsEngineType.PIPER_ONNX,
+): Boolean {
+    if (usePiper) return true
+
+    val targetVoiceName = (overrideVoiceName ?: settings.systemVoiceName)?.trim()
+    if (targetVoiceName.isNullOrEmpty() || targetVoiceName == DEFAULT_VI_VOICE_ID) {
+        return true
+    }
+
+    val matchedVoice = availableVoices.firstOrNull { it.name == targetVoiceName }
+    if (matchedVoice != null) {
+        return matchedVoice.locale.startsWith("vi", ignoreCase = true)
+    }
+
+    val lowerName = targetVoiceName.lowercase()
+    if (lowerName.contains("vi-") || lowerName.contains("vi_")) {
+        return true
+    }
+    return NON_VI_VOICE_LOCALE_MARKERS.none { lowerName.contains(it) }
 }
 
 private val iso639_2To1 = mapOf(

@@ -420,4 +420,76 @@ class SubtitleTtsCoordinatorTimingTest {
         SubtitleTtsCoordinator.onSubtitleCueChanged("Xin chào", timingContext = context)
         assertNull(SubtitleTtsCoordinator.statusMessage.value)
     }
+
+    @Test
+    fun prepareTtsSpeechTextTransliteratesForVietnameseTargetsUpdatesTimingAndAlignsLookaheadCacheKey() {
+        val dict = TtsPhoneticDictionary.parseFromText(
+            """
+            christopher	Crít xtô phơ
+            tony stark	Tô ni Xtác
+            """.trimIndent(),
+        )
+        val transliterator = EnglishToVietnameseTransliterator(dict)
+        val voices = listOf(
+            SystemVoiceInfo("vi-vn-x-gft-local", "Vi", "vi-VN", false),
+            SystemVoiceInfo("en-us-x-sfg-local", "En", "en-US", false),
+        )
+
+        val enabledPiper = SubtitleTtsSettings(
+            engineType = SubtitleTtsEngineType.PIPER_ONNX,
+            transliterateEnglishNames = true,
+        )
+        val (spokenEnabled, finalEnabled) = prepareTtsSpeechText(
+            cleanText = "Christopher gặp Tony Stark",
+            settings = enabledPiper,
+            availableVoices = voices,
+            usePiper = true,
+            transliterator = transliterator,
+        )
+        assertEquals("Crít xtô phơ gặp Tô ni Xtác", spokenEnabled)
+        assertEquals("Crít xtô phơ gặp Tô ni Xtác.", finalEnabled)
+
+        // Expanded Vietnamese syllables produce a longer natural duration estimate than raw English tokens.
+        val rawDurationMs = SubtitleTtsTimingCalculator.estimateNaturalDurationMs("Christopher gặp Tony Stark")
+        val spokenDurationMs = SubtitleTtsTimingCalculator.estimateNaturalDurationMs(spokenEnabled)
+        assertTrue(spokenDurationMs > rawDurationMs, "Expected $spokenDurationMs > $rawDurationMs")
+
+        // Lookahead and Speak compute identical PcmCacheKey values when both pass through prepareTtsSpeechText.
+        val budgetMs = 1_500L
+        val lookaheadSpeed = SubtitleTtsTimingCalculator.calculateTimingAwareSpeed(
+            cleanText = spokenEnabled,
+            budgetMs = budgetMs,
+            baseSpeed = enabledPiper.baseSpeed,
+            autoSpeedEnabled = enabledPiper.autoSpeedEnabled,
+            maxAutoSpeed = enabledPiper.maxAutoSpeed,
+        )
+        val lookaheadKey = PcmCacheKey("ngochuyen5", finalEnabled, quantizeSpeedBucket(lookaheadSpeed))
+        val speakKey = PcmCacheKey("ngochuyen5", finalEnabled, quantizeSpeedBucket(lookaheadSpeed))
+        assertEquals(lookaheadKey, speakKey)
+
+        // Disabled toggle preserves original text.
+        val (_, finalDisabled) = prepareTtsSpeechText(
+            cleanText = "Christopher gặp Tony Stark",
+            settings = enabledPiper.copy(transliterateEnglishNames = false),
+            availableVoices = voices,
+            usePiper = true,
+            transliterator = transliterator,
+        )
+        assertEquals("Christopher gặp Tony Stark.", finalDisabled)
+
+        // Non-Vietnamese System voice skips Vietnamese transliteration even when enabled.
+        val enSystemSettings = SubtitleTtsSettings(
+            engineType = SubtitleTtsEngineType.SYSTEM,
+            systemVoiceName = "en-us-x-sfg-local",
+            transliterateEnglishNames = true,
+        )
+        val (_, finalEnglishVoice) = prepareTtsSpeechText(
+            cleanText = "Christopher meets Tony Stark",
+            settings = enSystemSettings,
+            availableVoices = voices,
+            usePiper = false,
+            transliterator = transliterator,
+        )
+        assertEquals("Christopher meets Tony Stark.", finalEnglishVoice)
+    }
 }

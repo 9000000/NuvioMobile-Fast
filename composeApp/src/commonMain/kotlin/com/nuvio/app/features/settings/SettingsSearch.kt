@@ -647,6 +647,12 @@ internal fun settingsSearchEntries(
                 "Nếu câu trước còn dở khi sang câu mới, chờ đọc nốt (trong ngưỡng an toàn) rồi mới chuyển tiếp",
                 page = SettingsPage.PlaybackAudio,
             ),
+            PlaybackSearchRow(
+                "tts-transliterate-english-names",
+                "Phiên âm tên riêng & từ tiếng Anh",
+                "Đọc tự nhiên tên nhân vật, địa danh và thuật ngữ tiếng Anh theo ngữ âm tiếng Việt",
+                page = SettingsPage.PlaybackAudio,
+            ),
             PlaybackSearchRow("subtitle-font", stringResource(Res.string.subtitle_font), stringResource(Res.string.subtitle_font_import_hint)),
             PlaybackSearchRow("subtitle-background-opacity", stringResource(Res.string.subtitle_background_opacity)),
             PlaybackSearchRow("subtitle-background-roundness", stringResource(Res.string.subtitle_background_roundness)),

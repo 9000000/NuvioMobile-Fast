@@ -29,6 +29,7 @@ class SubtitleTtsStorageTest {
         assertEquals(SubtitleTtsTimingCalculator.DEFAULT_MAX_AUTO_SPEED, defaults.maxAutoSpeed, 0.001f)
         assertFalse(defaults.waitForCueCompletion)
         assertTrue(defaults.autoSpeedEnabled)
+        assertTrue(defaults.transliterateEnglishNames)
 
         val custom = defaults.copy(
             enabled = true,
@@ -37,6 +38,7 @@ class SubtitleTtsStorageTest {
             maxAutoSpeed = 1.85f,
             waitForCueCompletion = true,
             hideSubtitlesWhenEnabled = true,
+            transliterateEnglishNames = false,
         )
         SubtitleTtsStorage.saveSettings(custom)
 
@@ -47,6 +49,10 @@ class SubtitleTtsStorageTest {
         assertEquals(1.85f, loaded.maxAutoSpeed, 0.001f)
         assertTrue(loaded.waitForCueCompletion)
         assertTrue(loaded.hideSubtitlesWhenEnabled)
+        assertFalse(loaded.transliterateEnglishNames)
+
+        SubtitleTtsStorage.saveSettings(custom.copy(transliterateEnglishNames = true))
+        assertTrue(SubtitleTtsStorage.loadSettings().transliterateEnglishNames)
 
         // Out-of-range and non-finite speeds must clamp cleanly on save/load.
         SubtitleTtsStorage.saveSettings(

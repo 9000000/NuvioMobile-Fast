@@ -878,6 +878,19 @@ private fun GeneralTtsAudioRows(
 
     SettingsGroupDivider(isTablet = isTablet)
     SettingsSwitchRow(
+        title = "Phiên âm tên riêng & từ tiếng Anh",
+        description = "Đọc tự nhiên tên nhân vật, địa danh và thuật ngữ tiếng Anh theo ngữ âm tiếng Việt",
+        checked = ttsSettings.transliterateEnglishNames,
+        isTablet = isTablet,
+        onCheckedChange = { transliterate ->
+            SubtitleTtsCoordinator.updateSettings {
+                it.copy(transliterateEnglishNames = transliterate)
+            }
+        },
+    )
+
+    SettingsGroupDivider(isTablet = isTablet)
+    SettingsSwitchRow(
         title = "Ẩn phụ đề khi TTS đọc",
         description = "Chỉ ẩn hiển thị chữ trên màn hình, phụ đề vẫn chạy ngầm để TTS đọc",
         checked = ttsSettings.hideSubtitlesWhenEnabled,
