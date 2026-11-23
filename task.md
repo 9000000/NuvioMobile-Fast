@@ -1,10 +1,33 @@
 # Task Management: NuvioMobile Fast
 
-## 📋 Trạng thái Hiện tại: HOÀN TẤT TRIỂN KHAI (`PLAN-subtitle-tts-timing-sync` - Chờ test thực tế trên máy)
+## 📋 Trạng thái Hiện tại: ĐÃ LẬP KẾ HOẠCH (`PLAN-merge-upstream-20261123` - Chờ duyệt để thực thi)
 
 ---
 
-### ⏱️ Đợt công việc Mới: Căn Nhịp TTS Theo Thời Gian Phụ Đề (`PLAN-subtitle-tts-timing-sync`)
+### 🔄 Đợt công việc Mới: Đồng bộ Upstream `NuvioMedia/NuvioMobile` (`18/11/2026` ➔ `23/11/2026`)
+*Kế hoạch chi tiết: [`PLAN-merge-upstream-20261123.md`](file:///f:/MyGithub/NuvioMobile-Fast/PLAN-merge-upstream-20261123.md) | Merge Base: `b66f7725c` ➔ Upstream HEAD: `642f6e031` (40 commits)*
+
+- [ ] **TASK-SYNC-261123-01** (`git-specialist`): Commit sạch tính năng Phiên âm TTS hiện có trên `main`, tạo nhánh sao lưu `backup/pre-upstream-merge-20261123` và nhánh làm việc `merge/upstream-20261123`.
+- [ ] **TASK-SYNC-261123-02** (`backend-specialist`): Chạy `git merge --no-commit --no-ff upstream/cmp-rewrite` và giải quyết conflict duy nhất tại `androidApp/src/main/AndroidManifest.xml` (giữ trọn cả `<uses-feature android:name="android.hardware.wifi" android:required="false" />` và khối `<queries>` TTS).
+- [ ] **TASK-SYNC-261123-03** (`quality-inspector`): Rà soát 4 file auto-merged (`SubtitleAudioModels.kt`, `SubtitleModal.kt`, `values/strings.xml`, `store.json`), kiểm tra không trùng key XML / JSON hợp lệ, và xác nhận 100% tùy chỉnh độc quyền của Fast còn nguyên vẹn.
+- [ ] **TASK-SYNC-261123-04** (`test-engineer`): Chạy toàn bộ `:composeApp:testAndroidHostTest` (bao gồm `ServerProfileDeviceIdTest` mới) và biên dịch `:androidApp:assembleFullDebug` (`-Pnuvio.android.distribution=full`).
+- [ ] **TASK-SYNC-261123-05** (`orchestrator`): Commit merge chuẩn hóa, fast-forward vào `main` và báo cáo chi tiết mọi thay đổi cho người dùng.
+
+---
+
+### 🗣️ Đợt công việc Trước: Phiên âm Tên riêng & Từ tiếng Anh cho TTS Tiếng Việt (`PLAN-tts-english-proper-name-transliteration` - HOÀN TẤT, chờ commit ở TASK-SYNC-261123-01)
+*Kế hoạch chi tiết: [`PLAN-tts-english-proper-name-transliteration.md`](file:///f:/MyGithub/NuvioMobile-Fast/PLAN-tts-english-proper-name-transliteration.md) | Nguồn tham chiếu: `NuvioTV-Fast`*
+
+- [x] **TASK-TTSTRANS-01** (`backend-specialist`): Đóng gói từ điển `tts_en_vi_dict.tsv` (1.015 mục) vào `composeApp/src/commonMain/composeResources/files/tts_en_vi_dict.tsv` và xây dựng `TtsPhoneticDictionary.kt` thuần KMP (nạp nền trên `Dispatchers.Default`, sửa lập chỉ mục cho từ ghép gạch nối/dấu chấm như `spider-man`, `obi-wan`, `wi-fi`, `middle-earth`, `k.o`) kèm `TtsPhoneticDictionaryAssetTest.kt`.
+- [x] **TASK-TTSTRANS-02** (`backend-specialist`): Xây dựng `EnglishToVietnameseTransliterator.kt` thuần KMP (single-pass zero-regex scanner, hỗ trợ nháy cong `’`, bảo vệ URL/email giữa câu, stop words tiếng Việt, loại bỏ phụ âm tiếng Việt `ph`/`th`/`tr` khỏi `ENGLISH_CLUSTERS`, từ viết tắt, rule-based fallback) kèm `EnglishToVietnameseTransliteratorTest.kt` trong `commonTest` và benchmark 500 cues `< 500ms`.
+- [x] **TASK-TTSTRANS-03** (`backend-specialist`): Mở rộng `SubtitleTtsModels.kt` (`transliterateEnglishNames = true`, `isVietnameseTtsTarget(...)`) và cập nhật lưu trữ `SubtitleTtsStorage` (Android `SharedPreferences` & iOS `NSUserDefaults`) kèm test trong `SubtitleTtsStorageTest.kt`.
+- [x] **TASK-TTSTRANS-04** (`backend-specialist`): Tích hợp `prepareTtsSpeechText(...)` vào `SubtitleTtsCoordinator.kt` cho cả Speak, Queue/Carry-Over, Preview, và **Piper Lookahead Pre-Synthesis** (đồng bộ `PcmCacheKey`, xóa `pcmCache` khi bật/tắt tùy chọn, preload từ điển khi `ensureLoaded()`) kèm test trong `SubtitleTtsCoordinatorTimingTest.kt`.
+- [x] **TASK-TTSTRANS-05** (`frontend-specialist`): Thêm công tắc `"Phiên âm tên riêng & từ tiếng Anh"` vào `PlaybackAudioTtsSettings.kt`, `SubtitleTtsModal.kt` và đăng ký từ khóa trong `SettingsSearch.kt`.
+- [x] **TASK-TTSTRANS-06** (`test-engineer`): Hoàn tất `:composeApp:testAndroidHostTest` (**332 suites / 2.325 tests PASS, 0 fail**), biên dịch `:androidApp:assembleFullDebug` (`BUILD SUCCESSFUL`), xác minh `tts_en_vi_dict.tsv` (`18.389` bytes) đã đóng gói bên trong APK và rule ProGuard sẵn sàng bảo vệ.
+
+---
+
+### ⏱️ Đợt công việc Trước: Căn Nhịp TTS Theo Thời Gian Phụ Đề (`PLAN-subtitle-tts-timing-sync` - Đã hoàn tất triển khai)
 *Kế hoạch chi tiết: [`PLAN-subtitle-tts-timing-sync.md`](file:///f:/MyGithub/NuvioMobile-Fast/PLAN-subtitle-tts-timing-sync.md) | Báo cáo nghiệm thu: [`walkthrough.md`](file:///f:/MyGithub/NuvioMobile-Fast/walkthrough.md)*
 
 - [x] **TASK-TTSSYNC-01**: Mở rộng `SubtitleTtsModels.kt` & `SubtitleTtsStorage` (Android/iOS) thêm `TimedSpeechCue`, `SubtitleCuePlaybackContext`, `maxAutoSpeed` (`1.4f..3.0f`, mặc định `2.1f`) và `waitForCueCompletion` (`Boolean = false`).
