@@ -1,17 +1,17 @@
 # Task Management: NuvioMobile Fast
 
-## 📋 Trạng thái Hiện tại: ĐÃ LẬP KẾ HOẠCH (`PLAN-merge-upstream-20261124` - Chờ duyệt để thực thi)
+## 📋 Trạng thái Hiện tại: HOÀN TẤT ĐỒNG BỘ UPSTREAM (`PLAN-merge-upstream-20261124` - Commit `830161c70` trên `main`)
 
 ---
 
-### 🔄 Đợt công việc Mới: Đồng bộ Upstream `9000000/NuvioMobile` (`22/11/2026` ➔ `24/11/2026`)
-*Kế hoạch chi tiết: [`PLAN-merge-upstream-20261124.md`](file:///f:/MyGithub/NuvioMobile-Fast/PLAN-merge-upstream-20261124.md) | Merge Base: `642f6e031` ➔ Upstream HEAD: `4ec93635a` (33 commits)*
+### 🔄 Đợt công việc Mới: Đồng bộ Upstream `9000000/NuvioMobile` (`22/11/2026` ➔ `24/11/2026`) — HOÀN TẤT 100%
+*Kế hoạch chi tiết: [`PLAN-merge-upstream-20261124.md`](file:///f:/MyGithub/NuvioMobile-Fast/PLAN-merge-upstream-20261124.md) | Merge Base: `642f6e031` ➔ Upstream HEAD: `4ec93635a` (33 commits) | Merge Commit: `830161c70`*
 
-- [ ] **TASK-SYNC-261124-01** (`git-specialist`): Commit thay đổi `iosApp/Configuration/Version.xcconfig` (`1.2.9` / `175`) trên `main`, tạo nhánh sao lưu `backup/pre-upstream-merge-20261124` và nhánh làm việc `merge/upstream-20261124`.
-- [ ] **TASK-SYNC-261124-02** (`backend-specialist`): Chạy `git merge --no-commit --no-ff nuvio-src/cmp-rewrite` và giải quyết 2 file conflict: `Version.xcconfig` (giữ `1.2.9` / `175`) và Smart Merge `values-vi/strings.xml` (giữ 130 key riêng của Fast, thêm 2 `<plurals>` Downloads, sửa typo dấu `"` thừa, khử sạch 20 key trùng lặp).
-- [ ] **TASK-SYNC-261124-03** (`quality-inspector`): Rà soát 4 file auto-merged (`SubtitleAudioModels.kt`, `SubtitleModal.kt`, `PlayerEngine.android.kt`, `PlayerEngine.ios.kt`), kiểm tra giữ nguyên `subtitleOutlineWidthRange = 1..10`, nút `+ Thêm phụ đề`, toàn bộ hook TTS, và validate XML (`0` dups).
-- [ ] **TASK-SYNC-261124-04** (`test-engineer`): Chạy toàn bộ `:composeApp:testAndroidHostTest` (gồm 3 test mới từ upstream: `AddonHttpTextLimitTest`, `AddonSyncEligibilityTest`, `PluginMediaTypeTest` + toàn bộ TTS tests) và biên dịch `:androidApp:assembleFullDebug` (kiểm chứng tương thích 2 Media3 AAR mới).
-- [ ] **TASK-SYNC-261124-05** (`orchestrator`): Commit merge chuẩn hóa, fast-forward vào `main` và xuất báo cáo nghiệm thu chi tiết.
+- [x] **TASK-SYNC-261124-01** (`git-specialist`): Đã commit `iosApp/Configuration/Version.xcconfig` (`1.2.9` / `175` — `b7b7fe0b3`), tạo nhánh sao lưu `backup/pre-upstream-merge-20261124` (`9629b78e1`) và nhánh làm việc `merge/upstream-20261124`.
+- [x] **TASK-SYNC-261124-02** (`backend-specialist`): Đã chạy `git merge --no-commit --no-ff nuvio-src/cmp-rewrite` và giải quyết sạch 2 file conflict: `Version.xcconfig` (giữ `1.2.9` / `175`) và Smart XML Merge `values-vi/strings.xml` (`2.665` strings, `6` plurals, `0` dups — bảo tồn trọn 125 key riêng của Fast, thêm 2 `<plurals>` Downloads, sửa typo dấu `"` thừa, dọn 5 key Downloads cũ không còn dùng).
+- [x] **TASK-SYNC-261124-03** (`quality-inspector`): Đã rà soát 4 file auto-merged (`SubtitleAudioModels.kt`, `SubtitleModal.kt`, `PlayerEngine.android.kt`, `PlayerEngine.ios.kt`), xác nhận giữ nguyên `subtitleOutlineWidthRange = 1..10`, `subtitleFontFamily`, nút `+ Thêm phụ đề`, toàn bộ hook TTS, và toàn bộ 11 file XML hợp lệ (`0` dups).
+- [x] **TASK-SYNC-261124-04** (`test-engineer`): Hoàn tất `:composeApp:testAndroidHostTest` (**336 suites / 2.338 tests PASS, 0 fail** — gồm 3 suite mới từ upstream: `AddonHttpTextLimitTest`, `AddonSyncEligibilityTest`, `PluginMediaTypeTest` + toàn bộ 9 suite TTS) và `:androidApp:assembleFullDebug` (`BUILD SUCCESSFUL`, tương thích 100% với 2 Media3 AAR mới).
+- [x] **TASK-SYNC-261124-05** (`orchestrator`): Đã commit merge `830161c70`, fast-forward vào `main` và xuất báo cáo nghiệm thu chi tiết.
 
 ---
 
