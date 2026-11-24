@@ -1,10 +1,21 @@
 # Task Management: NuvioMobile Fast
 
-## 📋 Trạng thái Hiện tại: HOÀN TẤT ĐỒNG BỘ UPSTREAM (`PLAN-merge-upstream-20261123` - Commit `e31731649` trên `main`)
+## 📋 Trạng thái Hiện tại: ĐÃ LẬP KẾ HOẠCH (`PLAN-merge-upstream-20261124` - Chờ duyệt để thực thi)
 
 ---
 
-### 🔄 Đợt công việc Mới: Đồng bộ Upstream `NuvioMedia/NuvioMobile` (`18/11/2026` ➔ `23/11/2026`) — HOÀN TẤT 100%
+### 🔄 Đợt công việc Mới: Đồng bộ Upstream `9000000/NuvioMobile` (`22/11/2026` ➔ `24/11/2026`)
+*Kế hoạch chi tiết: [`PLAN-merge-upstream-20261124.md`](file:///f:/MyGithub/NuvioMobile-Fast/PLAN-merge-upstream-20261124.md) | Merge Base: `642f6e031` ➔ Upstream HEAD: `4ec93635a` (33 commits)*
+
+- [ ] **TASK-SYNC-261124-01** (`git-specialist`): Commit thay đổi `iosApp/Configuration/Version.xcconfig` (`1.2.9` / `175`) trên `main`, tạo nhánh sao lưu `backup/pre-upstream-merge-20261124` và nhánh làm việc `merge/upstream-20261124`.
+- [ ] **TASK-SYNC-261124-02** (`backend-specialist`): Chạy `git merge --no-commit --no-ff nuvio-src/cmp-rewrite` và giải quyết 2 file conflict: `Version.xcconfig` (giữ `1.2.9` / `175`) và Smart Merge `values-vi/strings.xml` (giữ 130 key riêng của Fast, thêm 2 `<plurals>` Downloads, sửa typo dấu `"` thừa, khử sạch 20 key trùng lặp).
+- [ ] **TASK-SYNC-261124-03** (`quality-inspector`): Rà soát 4 file auto-merged (`SubtitleAudioModels.kt`, `SubtitleModal.kt`, `PlayerEngine.android.kt`, `PlayerEngine.ios.kt`), kiểm tra giữ nguyên `subtitleOutlineWidthRange = 1..10`, nút `+ Thêm phụ đề`, toàn bộ hook TTS, và validate XML (`0` dups).
+- [ ] **TASK-SYNC-261124-04** (`test-engineer`): Chạy toàn bộ `:composeApp:testAndroidHostTest` (gồm 3 test mới từ upstream: `AddonHttpTextLimitTest`, `AddonSyncEligibilityTest`, `PluginMediaTypeTest` + toàn bộ TTS tests) và biên dịch `:androidApp:assembleFullDebug` (kiểm chứng tương thích 2 Media3 AAR mới).
+- [ ] **TASK-SYNC-261124-05** (`orchestrator`): Commit merge chuẩn hóa, fast-forward vào `main` và xuất báo cáo nghiệm thu chi tiết.
+
+---
+
+### ✅ Đợt công việc Trước: Đồng bộ Upstream `NuvioMedia/NuvioMobile` (`18/11/2026` ➔ `23/11/2026`) — HOÀN TẤT 100%
 *Kế hoạch chi tiết: [`PLAN-merge-upstream-20261123.md`](file:///f:/MyGithub/NuvioMobile-Fast/PLAN-merge-upstream-20261123.md) | Merge Base: `b66f7725c` ➔ Upstream HEAD: `642f6e031` (40 commits) | Merge Commit: `e31731649`*
 
 - [x] **TASK-SYNC-261123-01** (`git-specialist`): Đã commit sạch tính năng Phiên âm TTS (`db71cc1f7`), tạo nhánh sao lưu `backup/pre-upstream-merge-20261123` (`d87bd1985`) và nhánh làm việc `merge/upstream-20261123`.
