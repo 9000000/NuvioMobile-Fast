@@ -1,9 +1,9 @@
 # Kế hoạch Chiến lược: Đồng bộ Commit mới nhất từ `9000000/NuvioMobile` (`21/11/2026` ➔ `27/11/2026`)
 
 > **Mã kế hoạch**: `PLAN-merge-upstream-20261127`  
-> **Trạng thái**: Chờ duyệt để thực thi (Pending Review)  
-> **Người lập**: Agent mon  
-> **Ngày lập**: 27/11/2026  
+> **Trạng thái**: HOÀN TẤT 100% (Merged into `main` via `c05311c1f`)  
+> **Người lập & thực thi**: Agent mon  
+> **Ngày hoàn tất**: 27/11/2026  
 > **Nguồn upstream**: `https://github.com/9000000/NuvioMobile.git` (Remote: `nuvio-src`, Nhánh: `cmp-rewrite`)  
 > **Nhánh đích**: `main` (Remote: `origin`, `https://github.com/9000000/NuvioMobile-Fast.git`)  
 > **Điểm cơ sở (Merge Base)**: `4ec93635a` (`2026-11-24`, `bump version` — đã đồng bộ toàn bộ commit trước ngày `24/11` trong đợt `PLAN-merge-upstream-20261124`)  
@@ -146,46 +146,46 @@ flowchart TD
 
 ### 🔹 Task 1 (`TASK-SYNC-261127-01`): Chốt `Version.xcconfig` (`1.3.0` / `176`) & Tạo Nhánh An toàn
 **Phụ trách**: `git-specialist`
-- [ ] Commit `iosApp/Configuration/Version.xcconfig` (`1.3.0` / `176`) và tài liệu plan lên `main`.
-- [ ] Tạo nhánh sao lưu `backup/pre-upstream-merge-20261127` và chuyển sang nhánh `merge/upstream-20261127`.
+- [x] Commit `iosApp/Configuration/Version.xcconfig` (`1.3.0` / `176`) và tài liệu plan lên `main`.
+- [x] Tạo nhánh sao lưu `backup/pre-upstream-merge-20261127` và chuyển sang nhánh `merge/upstream-20261127`.
 
 ### 🔹 Task 2 (`TASK-SYNC-261127-02`): Thực thi Merge & Giải quyết 2 Hard Conflicts
 **Phụ trách**: `backend-specialist`
-- [ ] Chạy `git merge --no-commit --no-ff nuvio-src/cmp-rewrite`.
-- [ ] Giải quyết `AutoSyncPlatform.android.kt`: chấp nhận `PlayerPlaybackNetworking.playbackHttpClient.newBuilder()` (đã tích hợp sẵn `IPv4FirstDns` + `NetworkErrorInterceptor` + warm pool).
-- [ ] Giải quyết 3 hunks trong `PlayerEngine.android.kt`: giữ đủ import, hợp nhất `AutoSyncExtractorsFactory` + `AudioSyncTaps` không gây overhead khi chỉ bật TTS, và hợp nhất `updateStyledSubtitle()` giữ cả ASS styling mới lẫn cờ `hideVisual` của TTS.
+- [x] Chạy `git merge --no-commit --no-ff nuvio-src/cmp-rewrite`.
+- [x] Giải quyết `AutoSyncPlatform.android.kt`: chấp nhận `PlayerPlaybackNetworking.playbackHttpClient.newBuilder()` (đã tích hợp sẵn `IPv4FirstDns` + `NetworkErrorInterceptor` + warm pool).
+- [x] Giải quyết 3 hunks trong `PlayerEngine.android.kt`: giữ đủ import, hợp nhất `AutoSyncExtractorsFactory` + `AudioSyncTaps` không gây overhead khi chỉ bật TTS, và hợp nhất `updateStyledSubtitle()` giữ cả ASS styling mới lẫn cờ `hideVisual` của TTS.
 
 ### 🔹 Task 3 (`TASK-SYNC-261127-03`): Khử trùng `sherpa-onnx-1.13.8.aar` & Rà soát File Auto-Merged
 **Phụ trách**: `backend-specialist` / `quality-inspector`
-- [ ] Chỉnh `composeApp/build.gradle.kts`: bỏ dòng trùng `implementation(files(sherpaOnnxAar).builtBy(downloadAudioSyncRuntime))` và task `DownloadAudioSyncRuntimeTask`, dùng chung 1 file cục bộ `implementation(files("libs/sherpa-onnx-1.13.8.aar"))` (SHA-256 khớp 100%) cho cả Piper TTS & Audio Sync.
-- [ ] Gọn hóa `composeApp/proguard-rules.pro` (xóa 2 dòng `-keep com.k2fsa.sherpa.onnx.**` bị lặp ở cuối).
-- [ ] Kiểm tra `androidApp/build.gradle.kts` (giữ ABI splits + dòng `excludes` `c-api`/`cxx-api`), `SubtitleAppearance.kt` (`phimmoi`, `oswald`), `SubtitleAppearanceControls.kt`, `SubtitleModal.kt`, `PlayerScreenRuntimeUi.kt`, `PlayerEngine.ios.kt`, `MainActivity.kt`, và `store-beta.json`.
+- [x] Chỉnh `composeApp/build.gradle.kts`: bỏ dòng trùng `implementation(files(sherpaOnnxAar).builtBy(downloadAudioSyncRuntime))` và task `DownloadAudioSyncRuntimeTask`, dùng chung 1 file cục bộ `implementation(files("libs/sherpa-onnx-1.13.8.aar"))` (SHA-256 khớp 100%) cho cả Piper TTS & Audio Sync.
+- [x] Gọn hóa `composeApp/proguard-rules.pro` (xóa 2 dòng `-keep com.k2fsa.sherpa.onnx.**` bị lặp ở cuối).
+- [x] Kiểm tra `androidApp/build.gradle.kts` (giữ ABI splits + dòng `excludes` `c-api`/`cxx-api`), `SubtitleAppearance.kt` (`phimmoi`, `oswald`), `SubtitleAppearanceControls.kt`, `SubtitleModal.kt`, `PlayerScreenRuntimeUi.kt`, `PlayerEngine.ios.kt`, `MainActivity.kt`, và `store-beta.json`.
 
 ### 🔹 Task 4 (`TASK-SYNC-261127-04`): Bổ sung Việt hóa cho Audio Sync Fallback & ASS Styling
 **Phụ trách**: `frontend-specialist`
-- [ ] Tạo `composeApp/src/commonMain/composeResources/values-vi/audio_sync_strings.xml` dịch đầy đủ 23 chuỗi của Audio Sync Fallback sang tiếng Việt tự nhiên.
-- [ ] Cập nhật `composeApp/src/commonMain/composeResources/values-vi/autosync_toast_strings.xml` bổ sung 7 chuỗi trạng thái mới (`autosync_status_*`).
-- [ ] Thêm chuỗi `subtitle_customize_ass` vào `composeApp/src/commonMain/composeResources/values-vi/strings.xml` và xác minh XML `0` duplicate keys.
+- [x] Tạo `composeApp/src/commonMain/composeResources/values-vi/audio_sync_strings.xml` dịch đầy đủ 23 chuỗi của Audio Sync Fallback sang tiếng Việt tự nhiên.
+- [x] Cập nhật `composeApp/src/commonMain/composeResources/values-vi/autosync_toast_strings.xml` bổ sung 7 chuỗi trạng thái mới (`autosync_status_*`).
+- [x] Thêm chuỗi `subtitle_customize_ass` vào `composeApp/src/commonMain/composeResources/values-vi/strings.xml` và xác minh XML `0` duplicate keys.
 
 ### 🔹 Task 5 (`TASK-SYNC-261127-05`): Kiểm thử Toàn diện & Biên dịch Android Full Debug
 **Phụ trách**: `test-engineer`
-- [ ] Chạy toàn bộ test suite (bao gồm **~19 suite mới** của AudioSync/AutoSync/PlayerSubtitleRestore + **9 suite TTS** + toàn bộ suite hiện có):
+- [x] Chạy toàn bộ test suite (bao gồm **~19 suite mới** của AudioSync/AutoSync/PlayerSubtitleRestore + **9 suite TTS** + toàn bộ suite hiện có):
   ```powershell
   .\gradlew.bat :composeApp:testAndroidHostTest "-Pnuvio.android.distribution=full" --console=plain
   ```
-  Kỳ vọng: **100% PASS (0 failures, 0 errors)**.
-- [ ] Biên dịch & đóng gói Android Full Debug (xác minh không lỗi duplicate classes/native libs từ `sherpa-onnx`, tương thích `lib-nuvio-engine-android-0.1.7.aar`, đóng gói cả `tts_en_vi_dict.tsv` & `silero_vad_v5_16k.bin`):
+  Kỳ vọng: **100% PASS (0 failures, 0 errors)** -> Kết quả: 356 test suites PASS (0 failures).
+- [x] Biên dịch & đóng gói Android Full Debug (xác minh không lỗi duplicate classes/native libs từ `sherpa-onnx`, tương thích `lib-nuvio-engine-android-0.1.7.aar`, đóng gói cả `tts_en_vi_dict.tsv` & `silero_vad_v5_16k.bin`):
   ```powershell
   .\gradlew.bat :androidApp:assembleFullDebug "-Pnuvio.android.distribution=full" --console=plain
   ```
-  Kỳ vọng: **`BUILD SUCCESSFUL`**.
+  Kỳ vọng: **`BUILD SUCCESSFUL`** -> Kết quả: BUILD SUCCESSFUL.
 
 ### 🔹 Task 6 (`TASK-SYNC-261127-06`): Hoàn tất Merge vào `main` & Báo cáo Nghiệm thu Chi tiết
 **Phụ trách**: `orchestrator`
-- [ ] Commit merge chuẩn hóa trên `merge/upstream-20261127`:
-  `Merge nuvio-src/cmp-rewrite (24/11/2026 - 26/11/2026, 32 commits -> 6d2fdab63)`
-- [ ] Fast-forward vào `main`, cập nhật `task.md` và `PLAN-merge-upstream-20261127.md`.
-- [ ] Xuất báo cáo nghiệm thu chi tiết mọi thay đổi đã nhận, xung đột đã xử lý và xác nhận bảo toàn tùy chỉnh.
+- [x] Commit merge chuẩn hóa trên `merge/upstream-20261127`:
+  `Merge nuvio-src/cmp-rewrite (24/11/2026 - 26/11/2026, 32 commits -> 6d2fdab63)` -> Commit: `c05311c1f`
+- [x] Fast-forward vào `main`, cập nhật `task.md` và `PLAN-merge-upstream-20261127.md`.
+- [x] Xuất báo cáo nghiệm thu chi tiết mọi thay đổi đã nhận, xung đột đã xử lý và xác nhận bảo toàn tùy chỉnh.
 
 ---
 
