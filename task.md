@@ -1,10 +1,22 @@
 # Task Management: NuvioMobile Fast
 
-## 📋 Trạng thái Hiện tại: HOÀN TẤT ĐỒNG BỘ UPSTREAM (`PLAN-merge-upstream-20261124` - Commit `830161c70` trên `main`)
+## 📋 Trạng thái Hiện tại: ĐÃ LẬP KẾ HOẠCH (`PLAN-merge-upstream-20261127` - Chờ duyệt để thực thi)
 
 ---
 
-### 🔄 Đợt công việc Mới: Đồng bộ Upstream `9000000/NuvioMobile` (`22/11/2026` ➔ `24/11/2026`) — HOÀN TẤT 100%
+### 🔄 Đợt công việc Mới: Đồng bộ Upstream `9000000/NuvioMobile` (`21/11/2026` ➔ `27/11/2026`)
+*Kế hoạch chi tiết: [`PLAN-merge-upstream-20261127.md`](file:///f:/MyGithub/NuvioMobile-Fast/PLAN-merge-upstream-20261127.md) | Merge Base: `4ec93635a` ➔ Upstream HEAD: `6d2fdab63` (32 commits)*
+
+- [ ] **TASK-SYNC-261127-01** (`git-specialist`): Commit `iosApp/Configuration/Version.xcconfig` (`1.3.0` / `176`), tạo nhánh sao lưu `backup/pre-upstream-merge-20261127` và nhánh làm việc `merge/upstream-20261127`.
+- [ ] **TASK-SYNC-261127-02** (`backend-specialist`): Chạy `git merge --no-commit --no-ff nuvio-src/cmp-rewrite` và giải quyết 2 Hard Conflicts: `AutoSyncPlatform.android.kt` (nhận bản `PlayerPlaybackNetworking.playbackHttpClient` vượt trội) và `PlayerEngine.android.kt` (3 hunks: imports, tách `AudioSyncTaps` không gây overhead cho TTS, hợp nhất ASS styling + cờ `hideVisual` TTS trên libmpv).
+- [ ] **TASK-SYNC-261127-03** (`backend-specialist` / `quality-inspector`): Xử lý Critical Semantic Conflict trùng `sherpa-onnx-1.13.8.aar` trong `composeApp/build.gradle.kts` (dùng chung 1 file cục bộ SHA-256 khớp 100% cho cả Piper TTS & Audio Sync), dọn lặp `composeApp/proguard-rules.pro`, và rà soát toàn bộ file auto-merged (`SubtitleAppearance`, `SubtitleModal`, `PlayerScreenRuntimeUi`, `PlayerEngine.ios.kt`, `MainActivity.kt`, `androidApp/build.gradle.kts`).
+- [ ] **TASK-SYNC-261127-04** (`frontend-specialist`): Bổ sung bản dịch Tiếng Việt chuẩn cho Audio Sync Fallback (`values-vi/audio_sync_strings.xml`, `values-vi/autosync_toast_strings.xml`) và `subtitle_customize_ass` (`values-vi/strings.xml`), xác minh `0` duplicate keys XML.
+- [ ] **TASK-SYNC-261127-05** (`test-engineer`): Chạy toàn bộ `:composeApp:testAndroidHostTest` (bao gồm 19 suite mới của AudioSync/AutoSync + 9 suite TTS) và biên dịch `:androidApp:assembleFullDebug` (xác minh không lỗi duplicate class/native lib, tương thích Nuvio Engine `0.1.7`, có đủ `tts_en_vi_dict.tsv` & `silero_vad_v5_16k.bin`).
+- [ ] **TASK-SYNC-261127-06** (`orchestrator`): Commit merge chuẩn hóa, fast-forward vào `main` và xuất báo cáo nghiệm thu chi tiết.
+
+---
+
+### ✅ Đợt công việc Trước: Đồng bộ Upstream `9000000/NuvioMobile` (`22/11/2026` ➔ `24/11/2026`) — HOÀN TẤT 100%
 *Kế hoạch chi tiết: [`PLAN-merge-upstream-20261124.md`](file:///f:/MyGithub/NuvioMobile-Fast/PLAN-merge-upstream-20261124.md) | Merge Base: `642f6e031` ➔ Upstream HEAD: `4ec93635a` (33 commits) | Merge Commit: `830161c70`*
 
 - [x] **TASK-SYNC-261124-01** (`git-specialist`): Đã commit `iosApp/Configuration/Version.xcconfig` (`1.2.9` / `175` — `b7b7fe0b3`), tạo nhánh sao lưu `backup/pre-upstream-merge-20261124` (`9629b78e1`) và nhánh làm việc `merge/upstream-20261124`.
