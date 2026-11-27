@@ -2594,6 +2594,7 @@
     <string name="subtitle_shadow">Đổ bóng</string>
     <string name="subtitle_shadow_description">Tách chữ khỏi các cảnh sáng.</string>
     <string name="subtitle_shadow_opacity">Độ mờ bóng</string>
+    <string name="subtitle_customize_ass">Tùy chỉnh kiểu ASS/SSA</string>
     <string name="subtitle_shadow_size">Kích thước bóng</string>
     <string name="subtitle_outline_width">Độ rộng viền</string>
     <string name="subtitle_reset_appearance">Đặt lại giao diện</string>

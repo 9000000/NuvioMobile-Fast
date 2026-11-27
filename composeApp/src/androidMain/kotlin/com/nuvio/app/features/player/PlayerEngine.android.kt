@@ -78,9 +78,14 @@ import androidx.media3.ui.PlayerView
 import androidx.media3.ui.SubtitleView
 import androidx.media3.ui.CaptionStyleCompat
 import com.nuvio.app.features.addons.httpGetTextWithHeaders
+import com.nuvio.app.features.audiosync.AudioSyncFallback
+import com.nuvio.app.features.audiosync.AudioSyncSettings
+import com.nuvio.app.features.audiosync.AudioSyncTaps
+import com.nuvio.app.features.audiosync.MpvAudioSyncHost
 import com.nuvio.app.features.autosync.AutoSyncExtractorsFactory
 import com.nuvio.app.features.autosync.AutoSyncLibassSubtitles
 import com.nuvio.app.features.autosync.AutoSyncPreferencesRepository
+import com.nuvio.app.features.autosync.AutoSyncState
 import com.nuvio.app.features.autosync.AutoSyncSyncedSubtitle
 import com.nuvio.app.features.autosync.EmbeddedSubtitleCueStore
 import com.nuvio.app.features.autosync.LIBMPV_AUTOSYNC_FILE_PREFIX
@@ -372,11 +377,16 @@ private fun ExoPlayerSurface(
             .let { factory -> // AutoSync/TTS hook: no observation while both are disabled.
                 AutoSyncPreferencesRepository.ensureLoaded()
                 SubtitleTtsCoordinator.ensureLoaded()
-                if (
-                    AutoSyncPreferencesRepository.preferredSubtitleAutoSyncOnStart.value ||
-                    SubtitleTtsCoordinator.settings.value.enabled
-                ) {
-                    AutoSyncExtractorsFactory(factory, sourceUrl)
+                val autoSyncOnStart = AutoSyncPreferencesRepository.preferredSubtitleAutoSyncOnStart.value
+                val ttsEnabled = SubtitleTtsCoordinator.settings.value.enabled
+                if (autoSyncOnStart || ttsEnabled) {
+                    val audioDelegate = if (autoSyncOnStart && AudioSyncSettings.fallbackEnabled.value) {
+                        AudioSyncFallback.initialize(context)
+                        AudioSyncTaps.wrapExtractors(factory, sourceUrl)
+                    } else {
+                        factory
+                    }
+                    AutoSyncExtractorsFactory(audioDelegate, sourceUrl)
                 } else factory
             }
     }
@@ -631,6 +641,9 @@ private fun ExoPlayerSurface(
                 drmSessionManagerProvider = drmSessionManagerProvider,
                 audioDelayUsProvider = audioDelayUs::get,
             ).also { builtPlayer ->
+                builtPlayer.getAssHandlerCompat()?.applyAssFontScaleCompat(
+                    playerSettings.assSubtitleStyle.assScale.toFloat(),
+                )
                 // Apply video effects only when ASS track was detected as selected.
                 // On first init videoEffectsNeeded is false. When onTracksChanged
                 // detects a selected ASS track, it flips to true which triggers a
@@ -1334,6 +1347,7 @@ private fun ExoPlayerSurface(
 
                 override fun applySubtitleStyle(style: SubtitleStyleState) {
                     currentSubtitleStyle = style
+                    exoPlayer.getAssHandlerCompat()?.applyAssFontScaleCompat(style.assScale.toFloat())
                     playerViewRef?.subtitleView?.setCues(subtitlePresenter.refresh())
                     playerViewRef?.applySubtitleStyle(style, pipVideoHeightPx)
                     sidecarController.onStyleChanged()
@@ -1363,6 +1377,9 @@ private fun ExoPlayerSurface(
                         it.subtitleDelayUs = subtitleDelayMs.toLong() * 1000L
                     }
                 }
+
+                override val rendersAssNatively: Boolean
+                    get() = exoPlayer.getAssHandlerCompat() != null
 
                 override val supportsAudioDelay = true
 
@@ -1449,7 +1466,8 @@ private fun ExoPlayerSurface(
             },
         )
         val ttsSettings by SubtitleTtsCoordinator.settings.collectAsStateWithLifecycle()
-        val syncedSubtitleUrl by AutoSyncSyncedSubtitle.url.collectAsStateWithLifecycle()
+        val autoSyncStatus by AutoSyncSyncedSubtitle.status.collectAsStateWithLifecycle()
+        val syncedSubtitleUrl = autoSyncStatus?.takeIf { it.state == AutoSyncState.SYNCED }?.url
         LaunchedEffect(playerViewRef, ttsSettings.shouldHideVisualSubtitles) {
             playerViewRef?.subtitleView?.alpha = if (ttsSettings.shouldHideVisualSubtitles) 0f else 1f
             playerViewRef?.subtitleView?.setCues(subtitlePresenter.refresh())
@@ -1558,14 +1576,16 @@ private fun LibmpvPlayerSurface(
     val sanitizedSourceHeaders = remember(sourceHeaders) {
         sanitizePlaybackHeaders(sourceHeaders)
     }
+    var playerViewRef by remember { mutableStateOf<NuvioLibmpvView?>(null) }
     val autoSyncCoordinator = rememberLibmpvAutoSyncCoordinator( // AutoSync hook
         scope = coroutineScope,
         sourceUrl = sourceUrl,
         sourceHeaders = sanitizedSourceHeaders,
         externalSubtitles = externalSubtitles,
         preferredSubtitleLanguage = preferredSubtitleLanguage,
+        getMpvHost = { playerViewRef },
+        onSubtitleDelayChanged = { delayMs -> playerViewRef?.setSubtitleDelayMs(delayMs) },
     )
-    var playerViewRef by remember { mutableStateOf<NuvioLibmpvView?>(null) }
     val nowPlayingController = remember(context, playerViewRef) {
         playerViewRef?.let { view ->
             AndroidPlayerNowPlayingController(
@@ -1914,7 +1934,7 @@ private class NuvioLibmpvView(
     videoOutput: AndroidLibmpvVideoOutput,
     private val hardwareDecodingEnabled: Boolean,
     private val yuv420pEnabled: Boolean,
-) : MpvSurfaceView(context, videoOutput.mpvValue) {
+) : MpvSurfaceView(context, videoOutput.mpvValue), MpvAudioSyncHost {
     private var currentSourceUrl: String? = null
     private var currentSourceAudioUrl: String? = null
     private var currentRequestHeaders: Map<String, String> = emptyMap()
@@ -1942,6 +1962,10 @@ private class NuvioLibmpvView(
     private val timelineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val cachedExternalTimelines = ConcurrentHashMap<String, List<SubtitleSyncCue>>()
     private val inFlightExternalTimelines = ConcurrentHashMap.newKeySet<String>()
+    private var appliedAssOverride: String? = null
+    private var appliedAssScale = 1.0
+    private var appliedAssBold: Boolean? = null
+    private var appliedSubPos: Int? = null
 
     fun disposeExternalTimelines() {
         timelineScope.cancel()
@@ -1953,9 +1977,33 @@ private class NuvioLibmpvView(
         executeMpv {
             val ttsSettings = SubtitleTtsCoordinator.settings.value
             val hideVisual = ttsSettings.shouldHideVisualSubtitles
-            val styled = appliedSubtitleStyle.usesStyledOverlay && SubtitleRendering.supportsTextOverlay(
-                mpv.getPropertyString("current-tracks/sub/codec").orEmpty(),
-            )
+            val codec = mpv.getPropertyString("current-tracks/sub/codec").orEmpty()
+            val style = appliedSubtitleStyle
+            val assOverride = SubtitleRendering.assOverride(codec, style.appearance.customizeAss, style.assScale)
+            if (appliedAssOverride != assOverride) {
+                mpv.setPropertyString("sub-ass-override", assOverride)
+                appliedAssOverride = assOverride
+            }
+            val scale = if (assOverride == "scale") style.assScale else 1.0
+            if (appliedAssScale != scale) {
+                mpv.setPropertyDouble("sub-scale", scale)
+                appliedAssScale = scale
+            }
+            val subPos = if (assOverride == "scale") 100 else (100 - style.bottomOffset / 10).coerceIn(0, 100)
+            if (appliedSubPos != subPos) {
+                mpv.setPropertyInt("sub-pos", subPos)
+                appliedSubPos = subPos
+            }
+            val assBold = style.bold.takeIf { assOverride == "force" }
+            if (appliedAssBold != assBold) {
+                if (assBold == null) {
+                    mpv.command("change-list", "sub-ass-style-overrides", "clr", "")
+                } else {
+                    mpv.command("change-list", "sub-ass-style-overrides", "set", if (assBold) "Bold=1" else "Bold=0")
+                }
+                appliedAssBold = assBold
+            }
+            val styled = style.usesStyledOverlay && SubtitleRendering.supportsTextOverlay(codec)
             val suppressMpvNativeSub = styled || hideVisual
             if (suppressMpvNativeSub != styledSubtitleVisible) {
                 mpv.setPropertyBoolean("sub-visibility", !suppressMpvNativeSub)
@@ -1995,7 +2043,6 @@ private class NuvioLibmpvView(
                 ""
             }
             val cues = parseMpvSubtitleText(text)
-            val style = appliedSubtitleStyle
             post {
                 if (!released.get()) {
                     subtitleCues = cues
@@ -2050,6 +2097,7 @@ private class NuvioLibmpvView(
         // Room above 100% for the player's amplification (+10 dB is about 316%).
         mpv.setOptionString("volume-max", "$LIBMPV_MAX_VOLUME_PERCENT").logIfMpvError("volume-max")
         mpv.setOptionString("vd-lavc-film-grain", "cpu")
+        mpv.setOptionString("sub-ass-override", "no")
         mpv.setPropertyBoolean("keep-open", true)
         mpv.setPropertyBoolean("input-default-bindings", true)
         mpv.setPropertyBoolean("audio-fallback-to-null", true)
@@ -2408,7 +2456,6 @@ private class NuvioLibmpvView(
             override fun applySubtitleStyle(style: SubtitleStyleState) {
                 executeMpv {
                     appliedSubtitleStyle = style
-                    mpv.setPropertyString("sub-ass-override", "no")
                     mpv.setPropertyString("sub-color", style.textColor.toMpvColor())
                     mpv.setPropertyString("sub-back-color", style.backgroundColor.toMpvColor())
                     mpv.setPropertyString("sub-outline-color", style.outlineColor.toMpvColor())
@@ -2426,7 +2473,6 @@ private class NuvioLibmpvView(
                     mpv.setPropertyInt("sub-font-size", style.toMpvSubtitleFontSize())
                     mpv.setPropertyInt("sub-outline-size", style.toMpvSubtitleOutlineSize())
                     mpv.setPropertyInt("sub-border-size", style.toMpvSubtitleOutlineSize())
-                    mpv.setPropertyInt("sub-pos", (100 - style.bottomOffset / 10).coerceIn(0, 100))
                     mpv.setPropertyBoolean("sub-filter-sdh", style.stripSdh)
                     mpv.setPropertyBoolean("sub-filter-sdh-harder", style.stripSdh)
                     updateStyledSubtitle()
@@ -2441,6 +2487,10 @@ private class NuvioLibmpvView(
                     )
                 }
             }
+
+            override val supportsAssStyleCustomization = true
+
+            override val rendersAssNatively = true
 
             override val supportsAudioDelay = true
 
@@ -2508,6 +2558,116 @@ private class NuvioLibmpvView(
                 .forEach { id -> mpv.command("sub-remove", id.toString()) }
             if (SubtitleTtsCoordinator.settings.value.enabled) {
                 prefetchExternalTimeline(path)
+            }
+        }
+    }
+
+    override fun currentPlaybackSnapshot(): PlayerPlaybackSnapshot = latestSnapshot
+
+    override fun selectedAudioLanguage(): String? =
+        latestAudioTracks.firstOrNull { it.isSelected }?.language
+
+    fun setSubtitleDelayMs(delayMs: Int) {
+        executeMpv {
+            mpv.setPropertyDouble(
+                "sub-delay",
+                delayMs.coerceIn(SUBTITLE_DELAY_MIN_MS, SUBTITLE_DELAY_MAX_MS) / 1000.0,
+            )
+        }
+    }
+
+    /**
+     * Adds [path] (a retimed copy of a subtitle) as a new external track and selects it, then
+     * removes [replaceTrackId], an earlier copy, so repeated retiming doesn't pile up tracks.
+     * Returns the new track's id, or null when it could not be added.
+     */
+    override suspend fun replaceAudioSyncSubtitle(
+        replacedUrl: String?,
+        path: String,
+        title: String?,
+        language: String?,
+        replaceTrackId: Int?,
+    ): Int? {
+        if (released.get() || path.isBlank()) return null
+        return withContext(mpvDispatcher) {
+            if (released.get()) return@withContext null
+            runCatching {
+                fun externalSubtitleTracks() = mpv.getPropertyNode("track-list")?.asArray()?.toList().orEmpty()
+                    .filter { node -> node.nodeString("type") == "sub" && node.nodeBoolean("external") == true }
+
+                val wasPaused = mpv.getPropertyBoolean("pause") ?: false
+                val replacedSource = replacedUrl?.toMpvSource()
+                val replaced = replacedSource?.let { source ->
+                    externalSubtitleTracks()
+                        .lastOrNull { node -> node.nodeString("external-filename") == source }
+                }
+                val safeTitle = title?.takeIf { it.isNotBlank() }
+                    ?: replaced?.let { node ->
+                        node.nodeString("title") ?: node.nodeString("external-filename")?.substringAfterLast('/')
+                    }
+                val safeLanguage = language?.takeIf { it.isNotBlank() } ?: replaced?.nodeString("lang")
+                when {
+                    safeTitle != null && safeLanguage != null ->
+                        mpv.command("sub-add", path, "select", safeTitle, safeLanguage)
+                    safeTitle != null -> mpv.command("sub-add", path, "select", safeTitle)
+                    else -> mpv.command("sub-add", path, "select")
+                }
+                mpv.setPropertyBoolean("sub-visibility", !styledSubtitleVisible)
+                val added = mpv.getPropertyString("sid")?.toIntOrNull()
+                if (replaceTrackId != null && replaceTrackId != added) {
+                    runCatching { mpv.command("sub-remove", replaceTrackId.toString()) }
+                }
+                // Drop the original URL track so libmpv's track-list doesn't show a duplicate entry.
+                if (replacedSource != null) {
+                    externalSubtitleTracks()
+                        .filter { node ->
+                            val id = node.nodeInt("id") ?: return@filter false
+                            val filename = node.nodeString("external-filename") ?: return@filter false
+                            id != added && filename == replacedSource
+                        }
+                        .mapNotNull { node -> node.nodeInt("id") }
+                        .forEach { id -> runCatching { mpv.command("sub-remove", id.toString()) } }
+                }
+                if (!wasPaused) mpv.setPropertyBoolean("pause", false)
+                latestAudioTracks = extractLibmpvTracks(context, type = "audio")
+                latestSubtitleTracks = extractLibmpvTracks(context, type = "sub")
+                updateStyledSubtitle()
+                added
+            }.getOrElse {
+                Log.w(TAG, "Failed to replace audio-synced external subtitle: ${it.message}")
+                null
+            }
+        }
+    }
+
+    override suspend fun restoreOriginalAudioSyncSubtitle(
+        trackId: Int,
+        originalUrl: String?,
+        title: String?,
+        language: String?,
+    ) {
+        if (released.get()) return
+        withContext(mpvDispatcher) {
+            if (released.get()) return@withContext
+            runCatching {
+                if (originalUrl != null && mpv.getPropertyString("sid")?.toIntOrNull() == trackId) {
+                    val safeTitle = title?.takeIf { it.isNotBlank() }
+                    val safeLanguage = language?.takeIf { it.isNotBlank() }
+                    val source = originalUrl.toMpvSource()
+                    when {
+                        safeTitle != null && safeLanguage != null ->
+                            mpv.command("sub-add", source, "select", safeTitle, safeLanguage)
+                        safeTitle != null -> mpv.command("sub-add", source, "select", safeTitle)
+                        else -> mpv.command("sub-add", source, "select")
+                    }
+                    mpv.setPropertyBoolean("sub-visibility", !styledSubtitleVisible)
+                }
+                mpv.command("sub-remove", trackId.toString())
+                latestAudioTracks = extractLibmpvTracks(context, type = "audio")
+                latestSubtitleTracks = extractLibmpvTracks(context, type = "sub")
+                updateStyledSubtitle()
+            }.onFailure {
+                Log.w(TAG, "Failed to restore original external subtitle: ${it.message}")
             }
         }
     }
@@ -2953,6 +3113,10 @@ private fun resolveSubtitleTypeface(context: Context, style: SubtitleStyleState)
  * so subtitles shrink and grow with the video exactly as it is shown full screen.
  */
 private fun PlayerView.applySubtitleStyle(style: SubtitleStyleState, pipVideoHeightPx: Float? = null) {
+    (player as? ExoPlayer)?.getAssHandlerCompat()?.applyAssFontScaleCompat(style.assScale.toFloat())
+    findViewById<android.widget.FrameLayout>(R.id.libass_overlay_container_gl)
+        ?.findAssOverlayChild()
+        ?.invalidateSubtitles()
     subtitleView?.apply {
         val baseBottomPaddingFraction = SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION * 2f / 3f
         val offsetFraction = (style.bottomOffset / 1000f).coerceIn(0f, 0.2f)
@@ -3276,11 +3440,12 @@ private class SubtitleOffsetRenderersFactory(
         enableFloatOutput: Boolean,
         enableAudioTrackPlaybackParams: Boolean,
     ): AudioSink {
-        return DefaultAudioSink.Builder(context)
+        val baseAudioSink = DefaultAudioSink.Builder(context)
             .setEnableFloatOutput(enableFloatOutput)
             .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
             .setAudioProcessors(arrayOf(GainAudioProcessor(audioAmplificationDbProvider)))
             .build()
+        return AudioSyncTaps.wrapAudioSink(baseAudioSink)
     }
 
     override fun buildAudioRenderers(

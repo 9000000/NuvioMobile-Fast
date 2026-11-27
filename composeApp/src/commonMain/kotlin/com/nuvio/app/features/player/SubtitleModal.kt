@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import com.nuvio.app.features.autosync.AutoSyncStatusIndicator
 import com.nuvio.app.features.autosync.AutoSyncedChip
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -88,6 +90,7 @@ fun SubtitleModal(
     onAutoSyncReload: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    supportsAssStyleCustomization: Boolean = false,
 ) {
     val effectiveSelectedAddonSubtitle = selectedAddonSubtitle
         ?: addonSubtitles.findSelectedAddon(selectedAddonSubtitleId)
@@ -323,6 +326,7 @@ fun SubtitleModal(
                                     subtitleAutoSyncState = subtitleAutoSyncState,
                                     isCompact = railMaxHeight < 420.dp,
                                     showHeader = false,
+                                    supportsAssStyleCustomization = supportsAssStyleCustomization,
                                     onStyleChanged = onStyleChanged,
                                     onSubtitleDelayChanged = onSubtitleDelayChanged,
                                     onSubtitleDelayReset = onSubtitleDelayReset,
@@ -335,6 +339,13 @@ fun SubtitleModal(
                     }
                 }
             }
+
+            AutoSyncStatusIndicator(
+                subtitleUrl = effectiveSelectedAddonSubtitle?.url,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .offset(y = 40.dp),
+            )
         }
     }
 }

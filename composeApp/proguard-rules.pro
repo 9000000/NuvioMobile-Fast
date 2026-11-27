@@ -57,7 +57,8 @@
 -keep class is.xyz.mpv.** { *; }
 -keep interface is.xyz.mpv.** { *; }
 
-# Sherpa-ONNX JNI wrapper classes, constructors, and fields read directly by libsherpa-onnx-jni.so.
+# Sherpa-ONNX JNI wrapper classes, constructors, and fields read directly by libsherpa-onnx-jni.so
+# (shared by both Piper ONNX TTS and Audio Sync speech recognition).
 -keep class com.k2fsa.sherpa.onnx.** { *; }
 -keep interface com.k2fsa.sherpa.onnx.** { *; }
 -keep enum com.k2fsa.sherpa.onnx.** { *; }

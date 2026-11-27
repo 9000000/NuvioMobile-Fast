@@ -1,5 +1,22 @@
 # ERRORS.md - Automatic Error Tracking & Learning
 
+## [2026-11-27 09:30] - Lỗi biên dịch `AutoSyncSyncedSubtitle.url` sau khi merge PR #2732 (`Audio Sync Fallback`)
+
+- **Type**: Integration / Build
+- **Severity**: Medium
+- **File**: `composeApp/src/androidMain/kotlin/com/nuvio/app/features/player/PlayerEngine.android.kt:1468`
+- **Agent**: mon
+- **Root Cause**: PR #2732 của upstream thay đổi API của `AutoSyncSyncedSubtitle` từ `url: StateFlow<String?>` sang `status: StateFlow<AutoSyncSyncedSubtitle.Status?>` (gồm `url` và `state: AutoSyncState`). Hook reload timeline phụ đề ngoài cho TTS của nhánh Fast vẫn tham chiếu thuộc tính cũ `AutoSyncSyncedSubtitle.url`.
+- **Error Message**:
+  ```
+  e: PlayerEngine.android.kt:1468:57 Unresolved reference 'url'.
+  ```
+- **Fix Applied**: Cập nhật `PlayerEngine.android.kt` sang thu thập `AutoSyncSyncedSubtitle.status.collectAsStateWithLifecycle()` và lọc `autoSyncStatus?.takeIf { it.state == AutoSyncState.SYNCED }?.url`.
+- **Prevention**: Khi merge các PR có refactor package `autosync`, luôn grep kiểm tra mọi tham chiếu cục bộ từ hook TTS sang `AutoSync*` trước khi chạy build.
+- **Status**: Fixed
+
+---
+
 ## [2026-11-23 22:18] - `EnglishToVietnameseTransliterator` viết hoa nhầm từ tiếng Việt chứa `ph`/`th`/`tr` (`phim` -> `Phim`)
 
 - **Type**: Logic / Process

@@ -1,8 +1,7 @@
 package com.nuvio.app.features.autosync
 
-import com.nuvio.app.core.network.IPv4FirstDns
-import com.nuvio.app.core.network.NetworkErrorInterceptor
 import com.nuvio.app.features.addons.AddonHttpClientProvider
+import com.nuvio.app.features.player.PlayerPlaybackNetworking
 import java.io.IOException
 import java.io.InputStream
 import java.nio.ByteBuffer
@@ -21,16 +20,18 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 
-/** Dedicated client for container index range requests, kept apart from Nuvio's shared pool. */
+/**
+ * Container index range requests: share PlayerPlaybackNetworking's warm connection pool,
+ * dispatcher, IPv4-first DNS, HTTP/2 + HTTP/1.1 negotiation, and self-signed server fallback,
+ * with tight per-request timeouts.
+ */
 private val containerIndexHttpClient: OkHttpClient by lazy {
-    OkHttpClient.Builder()
-        .dns(IPv4FirstDns())
+    PlayerPlaybackNetworking.playbackHttpClient.newBuilder()
         .connectTimeout(3, TimeUnit.SECONDS)
         .readTimeout(4, TimeUnit.SECONDS)
         .callTimeout(5, TimeUnit.SECONDS)
         .followRedirects(true)
         .followSslRedirects(true)
-        .addInterceptor(NetworkErrorInterceptor())
         .build()
 }
 

@@ -38,6 +38,7 @@ actual object PlayerSettingsStorage {
     private const val secondaryPreferredSubtitleLanguageKey = "secondary_preferred_subtitle_language"
     private const val subtitleTextColorKey = "subtitle_text_color"
     private const val subtitleAppearanceKey = "subtitle_appearance"
+    private const val assSubtitleStyleKey = "subtitle_ass_style"
     private const val subtitleBackgroundColorKey = "subtitle_background_color"
     private const val subtitleOutlineColorKey = "subtitle_outline_color"
     private const val subtitleOutlineEnabledKey = "subtitle_outline_enabled"
@@ -143,6 +144,7 @@ private const val subtitleCustomFontNameKey = "subtitle_custom_font_name"
         subtitleTextColorKey,
         subtitleBackgroundColorKey,
         subtitleAppearanceKey,
+        assSubtitleStyleKey,
         subtitleOutlineColorKey,
         subtitleOutlineEnabledKey,
         subtitleOutlineWidthKey,
@@ -484,6 +486,13 @@ private const val subtitleCustomFontNameKey = "subtitle_custom_font_name"
 
     actual fun saveSubtitleAppearance(value: String) {
         NSUserDefaults.standardUserDefaults.setObject(value, forKey = ProfileScopedKey.of(subtitleAppearanceKey))
+    }
+
+    actual fun loadAssSubtitleStyle(): String? =
+        NSUserDefaults.standardUserDefaults.stringForKey(ProfileScopedKey.of(assSubtitleStyleKey))
+
+    actual fun saveAssSubtitleStyle(value: String) {
+        NSUserDefaults.standardUserDefaults.setObject(value, forKey = ProfileScopedKey.of(assSubtitleStyleKey))
     }
 
     actual fun loadSubtitleBackgroundColor(): String? {
@@ -1347,6 +1356,7 @@ private const val subtitleCustomFontNameKey = "subtitle_custom_font_name"
         loadSecondaryPreferredSubtitleLanguage()?.let { put(secondaryPreferredSubtitleLanguageKey, encodeSyncString(it)) }
         loadSubtitleTextColor()?.let { put(subtitleTextColorKey, encodeSyncString(it)) }
         loadSubtitleAppearance()?.let { put(subtitleAppearanceKey, encodeSyncString(it)) }
+        loadAssSubtitleStyle()?.let { put(assSubtitleStyleKey, encodeSyncString(it)) }
         loadSubtitleBackgroundColor()?.let { put(subtitleBackgroundColorKey, encodeSyncString(it)) }
         loadSubtitleOutlineColor()?.let { put(subtitleOutlineColorKey, encodeSyncString(it)) }
         loadSubtitleOutlineEnabled()?.let { put(subtitleOutlineEnabledKey, encodeSyncBoolean(it)) }
@@ -1453,6 +1463,7 @@ private const val subtitleCustomFontNameKey = "subtitle_custom_font_name"
         payload.decodeSyncString(secondaryPreferredSubtitleLanguageKey)?.let(::saveSecondaryPreferredSubtitleLanguage)
         payload.decodeSyncString(subtitleTextColorKey)?.let(::saveSubtitleTextColor)
         payload.decodeSyncString(subtitleAppearanceKey)?.let(::saveSubtitleAppearance)
+        payload.decodeSyncString(assSubtitleStyleKey)?.let(::saveAssSubtitleStyle)
         payload.decodeSyncString(subtitleBackgroundColorKey)?.let(::saveSubtitleBackgroundColor)
         payload.decodeSyncString(subtitleOutlineColorKey)?.let(::saveSubtitleOutlineColor)
         payload.decodeSyncBoolean(subtitleOutlineEnabledKey)?.let(::saveSubtitleOutlineEnabled)
